@@ -53,7 +53,7 @@ Get-ChildItem -LiteralPath $outputDir -File -Filter "SHA256SUMS.txt" -ErrorActio
 
 $scriptPath = Join-Path $PSScriptRoot "installer\SofaScore.iss"
 Write-Host "Generando instalador para SofaScore $version..."
-& $iscc "/DAppVersion=$version" $scriptPath
+& $iscc "/DMyAppVersion=$version" $scriptPath
 if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup devolvio el codigo $LASTEXITCODE."
 }
