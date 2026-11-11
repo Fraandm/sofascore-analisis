@@ -2232,7 +2232,11 @@ function renderHeatmap(matrix, homeName, awayName) {
           const probability = Number(value || 0) / max;
           const alpha = 0.05 + probability * 0.86;
           const color = probability > 0.55 ? "#fff" : "var(--text)";
-          return `<div class="heatmap-cell" style="background:color-mix(in srgb, var(--accent) ${Math.round(alpha * 100)}%, var(--surface-3));color:${color}" title="${esc(labels[rowIndex])}-${esc(labels[columnIndex])}: ${pct(value, 1)}">${value >= 0.005 ? (Number(value) * 100).toFixed(0) : "·"}</div>`;
+          const percentage = (Number(value || 0) * 100).toLocaleString("es-ES", {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          });
+          return `<div class="heatmap-cell" style="background:color-mix(in srgb, var(--accent) ${Math.round(alpha * 100)}%, var(--surface-3));color:${color}" title="${esc(labels[rowIndex])}-${esc(labels[columnIndex])}: ${pct(value, 1)}">${percentage}</div>`;
         })
         .join("");
       return rowLabel + cells;

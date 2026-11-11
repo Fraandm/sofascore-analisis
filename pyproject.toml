@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sofascore-extractor"
-version = "1.15.3"
+version = "1.15.4"
 description = "Extractor no oficial de partidos y estadísticas de fútbol desde la API interna de SofaScore"
 readme = "README.md"
 requires-python = ">=3.9"
