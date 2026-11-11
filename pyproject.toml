@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sofascore-extractor"
+version = "1.15.1"
+description = "Extractor no oficial de partidos y estadísticas de fútbol desde la API interna de SofaScore"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "curl_cffi>=0.7.0",
+    "numpy>=1.26",
+    "tzdata>=2024.1; sys_platform == 'win32'",
+]
+
+[project.scripts]
+sofascore = "sofascore.cli:main"
+sofascore-web = "sofascore.webapp:main"
+
+[project.gui-scripts]
+sofascore-gui = "sofascore.webapp:main"
+sofascore-classic = "sofascore.gui:main"
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.16"]
+
+[tool.setuptools.packages.find]
+include = ["sofascore*"]
+
+[tool.setuptools.package-data]
+sofascore = ["models/*.npz", "web_ui/*"]

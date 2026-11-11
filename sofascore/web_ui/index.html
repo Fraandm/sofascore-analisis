@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>SofaScore · Análisis de forma</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" role="img">
+            <defs>
+              <linearGradient id="brandGradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#3b82f6"/>
+                <stop offset="1" stop-color="#06b6d4"/>
+              </linearGradient>
+            </defs>
+            <rect x="2" y="2" width="44" height="44" rx="14" fill="url(#brandGradient)"/>
+            <path d="M14 30.5 20.5 16l6 10.5L32 20l2 2-8.5 12-6-10.5L16 32z" fill="#fff" opacity=".95"/>
+            <circle cx="34.5" cy="14" r="2.4" fill="#fff" opacity=".8"/>
+          </svg>
+        </div>
+        <div class="brand-copy">
+          <strong>SofaScore</strong>
+          <span>Análisis de forma</span>
+        </div>
+        <span class="brand-version" id="brandVersion">v1.15</span>
+      </div>
+
+      <nav class="nav" aria-label="Secciones">
+        <span class="nav-label">Principal</span>
+        <button class="nav-item is-active" data-view="matches" type="button">
+          <span class="nav-icon" data-icon="ball"></span>
+          <span>Partidos</span>
+          <span class="nav-badge" id="navMatchCount">—</span>
+        </button>
+        <button class="nav-item" data-view="live" type="button">
+          <span class="nav-icon" data-icon="live"></span>
+          <span>Sala de directo</span>
+          <span class="nav-dot" id="navLiveDot" hidden></span>
+        </button>
+        <button class="nav-item" data-view="journal" type="button">
+          <span class="nav-icon" data-icon="notebook"></span>
+          <span>Cuaderno</span>
+        </button>
+        <button class="nav-item" data-view="previews" type="button">
+          <span class="nav-icon" data-icon="file"></span>
+          <span>Estudio de previas</span>
+        </button>
+        <button class="nav-item" data-view="explorer" type="button">
+          <span class="nav-icon" data-icon="compass"></span>
+          <span>Explorador</span>
+        </button>
+        <button class="nav-item" data-view="model" type="button">
+          <span class="nav-icon" data-icon="brain"></span>
+          <span>Modelo</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+
+      <div class="model-mini" id="sidebarModel">
+        <div class="model-mini-top">
+          <span class="pulse-dot"></span>
+          <span>Modelo activo</span>
+          <span class="model-mini-version" id="sidebarModelVersion">—</span>
+        </div>
+        <div class="model-mini-value" id="sidebarModelMae">—</div>
+        <div class="model-mini-caption">error medio en goles</div>
+      </div>
+
+      <div class="sidebar-actions">
+        <button class="ghost-button" id="themeToggle" type="button" title="Cambiar tema (Ctrl+D)">
+          <span data-icon="moon"></span>
+          <span class="theme-label">Modo oscuro</span>
+        </button>
+        <button class="ghost-button" id="helpButton" type="button" title="Ayuda (F1)">
+          <span data-icon="help"></span>
+          <span>Ayuda</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-button menu-button" id="menuToggle" type="button" title="Menú">
+          <span data-icon="menu"></span>
+        </button>
+
+        <div class="date-cluster" id="dateCluster">
+          <button class="icon-button" id="prevDay" type="button" title="Día anterior">
+            <span data-icon="chevron-left"></span>
+          </button>
+          <label class="date-field" title="Elegir fecha">
+            <span data-icon="calendar"></span>
+            <input type="date" id="dateInput" aria-label="Fecha">
+          </label>
+          <button class="icon-button" id="nextDay" type="button" title="Día siguiente">
+            <span data-icon="chevron-right"></span>
+          </button>
+          <button class="soft-button" id="todayButton" type="button">Hoy</button>
+          <span class="day-caption" id="dayCaption"></span>
+        </div>
+
+        <div class="topbar-spacer"></div>
+
+        <div class="search-field top-search" id="matchSearchWrap">
+          <span data-icon="search"></span>
+          <input id="matchSearch" type="search" placeholder="Buscar partido, equipo o liga" autocomplete="off">
+          <kbd>Ctrl K</kbd>
+        </div>
+
+        <button class="icon-button" id="teamSearchButton" type="button" title="Buscar equipo (Ctrl+G)">
+          <span data-icon="users"></span>
+        </button>
+        <button class="icon-button" id="refreshButton" type="button" title="Recargar (Ctrl+R)">
+          <span data-icon="refresh"></span>
+        </button>
+        <button class="live-pill" id="livePill" type="button" title="Ver partidos en vivo">
+          <span class="live-dot"></span>
+          <span id="livePillText">En vivo</span>
+        </button>
+        <button class="icon-button" id="settingsButton" type="button" title="Ajustes">
+          <span data-icon="sliders"></span>
+        </button>
+      </header>
+
+      <div class="filterbar" id="filterbar">
+        <div class="filter-group">
+          <label class="select-field">
+            <span class="select-label">Región</span>
+            <select id="regionSelect"></select>
+          </label>
+          <label class="select-field">
+            <span class="select-label">Competiciones</span>
+            <select id="competitionSelect"></select>
+          </label>
+          <label class="select-field league-field">
+            <span class="select-label">Liga</span>
+            <select id="leagueSelect"></select>
+          </label>
+        </div>
+        <div class="status-chips" id="statusChips">
+          <button class="chip is-active" data-status="all" type="button">Todos</button>
+          <button class="chip" data-status="live" type="button"><span class="live-dot"></span>En vivo</button>
+          <button class="chip" data-status="upcoming" type="button">Próximos</button>
+          <button class="chip" data-status="finished" type="button">Finalizados</button>
+          <button class="chip chip-fav" data-status="favorites" type="button"><span data-icon="star"></span>Favoritos</button>
+        </div>
+        <div class="filterbar-spacer"></div>
+        <span class="matches-count" id="matchesCount">Cargando…</span>
+      </div>
+
+      <section class="view is-active" id="view-matches">
+        <div class="matches-layout">
+          <div class="match-list-pane">
+            <div class="list-toolbar">
+              <div class="list-heading">
+                <h1 id="listTitle">Partidos</h1>
+                <p id="listSubtitle">Selecciona un partido para analizarlo.</p>
+              </div>
+              <button class="subtle-button" id="collapseFilters" type="button" title="Mostrar u ocultar filtros">
+                <span data-icon="filter"></span>
+              </button>
+            </div>
+            <div class="loading-line" id="loadingLine" hidden><span></span></div>
+            <div class="rest-banner" id="restBanner" hidden>
+              <span class="spinner small"></span>
+              <span>Cargando el resto de competiciones…</span>
+            </div>
+            <div class="match-list" id="matchList" role="list"></div>
+            <div class="empty-state" id="listEmpty" hidden>
+              <div class="empty-icon" data-icon="calendar"></div>
+              <h2>No hay partidos</h2>
+              <p>Prueba con otra fecha, región o competición.</p>
+              <button class="primary-button" id="emptyTodayButton" type="button">Ir a hoy</button>
+            </div>
+          </div>
+
+          <aside class="detail-pane" id="detailPane" aria-live="polite">
+            <div class="detail-empty" id="detailEmpty">
+              <div class="illustration">
+                <div class="illustration-ring"></div>
+                <div class="illustration-ball" data-icon="ball"></div>
+                <div class="illustration-chart" data-icon="chart"></div>
+              </div>
+              <h2>Tu centro de análisis</h2>
+              <p>Elige un partido de la lista para ver la forma reciente, simular el resultado y generar una previa.</p>
+              <div class="empty-features">
+                <span><span data-icon="check"></span> Forma y comparación</span>
+                <span><span data-icon="check"></span> Monte Carlo</span>
+                <span><span data-icon="check"></span> Previa HTML</span>
+              </div>
+            </div>
+            <div class="detail-content" id="detailContent" hidden></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-live">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Ahora mismo</p>
+            <h1>Sala de directo</h1>
+            <p class="page-subtitle">Marcadores, minutos y pronósticos guardados. Se actualiza automáticamente.</p>
+          </div>
+          <div class="page-actions">
+            <button class="soft-button" id="liveRefreshButton" type="button"><span data-icon="refresh"></span>Actualizar</button>
+            <button class="primary-button" id="liveGoMatches" type="button">Ver todos los partidos</button>
+          </div>
+        </div>
+        <div class="live-toolbar">
+          <div class="segmented" id="liveFilters">
+            <button class="is-active" data-live-filter="live" type="button">En vivo</button>
+            <button data-live-filter="favorites" type="button">Favoritos</button>
+            <button data-live-filter="all" type="button">Todos</button>
+          </div>
+          <span class="live-updated" id="liveUpdated">—</span>
+        </div>
+        <div class="live-grid" id="liveGrid"></div>
+        <div class="empty-state" id="liveEmpty" hidden>
+          <div class="empty-icon" data-icon="live"></div>
+          <h2>No hay partidos con este filtro</h2>
+          <p>Cuando empiece el siguiente partido aparecerá aquí.</p>
+          <button class="primary-button" id="liveEmptyButton" type="button">Ver la jornada</button>
+        </div>
+      </section>
+
+      <section class="view" id="view-journal">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Seguimiento</p>
+            <h1>Cuaderno de predicciones</h1>
+            <p class="page-subtitle">Cada simulación se guarda sola. Aquí ves el pronóstico, el resultado real y el acierto del modelo.</p>
+          </div>
+          <div class="page-actions">
+            <button class="soft-button" id="journalRefresh" type="button"><span data-icon="refresh"></span>Actualizar</button>
+            <button class="soft-button" id="journalExport" type="button"><span data-icon="download"></span>Exportar CSV</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="journalKpis"></div>
+        <div class="panel">
+          <div class="panel-toolbar">
+            <div class="search-field compact">
+              <span data-icon="search"></span>
+              <input id="journalSearch" type="search" placeholder="Buscar en el cuaderno">
+            </div>
+            <label class="select-field inline">
+              <select id="journalStatus">
+                <option value="all">Todas</option>
+                <option value="resolved">Resueltas</option>
+                <option value="pending">Pendientes</option>
+                <option value="hit">Acertadas</option>
+                <option value="miss">Falladas</option>
+              </select>
+            </label>
+            <span class="panel-count" id="journalCount"></span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Guardada</th>
+                  <th>Partido</th>
+                  <th>Competición</th>
+                  <th>Pronóstico</th>
+                  <th class="num">Prob.</th>
+                  <th class="num">Real</th>
+                  <th>Estado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="journalBody"></tbody>
+            </table>
+          </div>
+          <div class="panel-footer" id="journalFooter"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-previews">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Editorial</p>
+            <h1>Estudio de previas</h1>
+            <p class="page-subtitle">Una previa lista para copiar, guardar o imprimir como PDF desde el navegador.</p>
+          </div>
+          <div class="page-actions" id="previewActions">
+            <button class="soft-button" id="previewCopy" type="button"><span data-icon="copy"></span>Copiar Markdown</button>
+            <button class="soft-button" id="previewDownloadMd" type="button"><span data-icon="download"></span>Markdown</button>
+            <button class="soft-button" id="previewDownloadHtml" type="button"><span data-icon="download"></span>HTML</button>
+            <button class="primary-button" id="previewOpen" type="button"><span data-icon="external"></span>Abrir en navegador</button>
+          </div>
+        </div>
+        <div class="preview-layout">
+          <div class="panel preview-panel">
+            <div class="preview-toolbar">
+              <span class="preview-title" id="previewTitle">Sin previa generada</span>
+              <span class="preview-badge" id="previewBadge">—</span>
+            </div>
+            <div class="preview-frame-wrap">
+              <iframe id="previewFrame" title="Previa del partido"></iframe>
+              <div class="empty-state compact" id="previewEmpty">
+                <div class="empty-icon" data-icon="file"></div>
+                <h2>Genera una previa</h2>
+                <p>Abre un partido y pulsa <strong>Generar previa</strong>. También puedes hacerlo desde la ficha del partido.</p>
+              </div>
+            </div>
+          </div>
+          <aside class="panel preview-side">
+            <h3>Qué incluye</h3>
+            <ul class="feature-list">
+              <li><span data-icon="check"></span> Forma reciente y comparación</li>
+              <li><span data-icon="check"></span> Probabilidades de la simulación</li>
+              <li><span data-icon="check"></span> Alineaciones y árbitro</li>
+              <li><span data-icon="check"></span> Diseño listo para imprimir</li>
+            </ul>
+            <div class="side-note">
+              <span data-icon="info"></span>
+              <p>El HTML incluye estilos propios. Ábrelo en el navegador y usa <strong>Imprimir → Guardar como PDF</strong>.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-explorer">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Datos</p>
+            <h1>Explorador</h1>
+            <p class="page-subtitle">Partidos y pronósticos guardados en tu equipo, con API local y exportación.</p>
+          </div>
+          <div class="page-actions">
+            <button class="soft-button" id="explorerFolder" type="button"><span data-icon="folder"></span>Carpeta de datos</button>
+            <button class="soft-button" id="explorerExport" type="button"><span data-icon="download"></span>Exportar CSV</button>
+            <button class="danger-button" id="explorerClear" type="button"><span data-icon="trash"></span>Borrar historial</button>
+          </div>
+        </div>
+        <div class="explorer-grid">
+          <div class="panel api-panel">
+            <div class="api-head">
+              <div class="api-icon" data-icon="api"></div>
+              <div>
+                <h3>API local</h3>
+                <p>Solo escucha en <code>127.0.0.1</code>. Ideal para integrarla con otras herramientas.</p>
+              </div>
+            </div>
+            <div class="api-url" id="apiUrl">—</div>
+            <div class="api-endpoints">
+              <code>GET /api/health</code>
+              <code>GET /api/day?date=…</code>
+              <code>GET /api/accuracy</code>
+              <code>GET /api/history/matches</code>
+            </div>
+            <div class="api-actions">
+              <button class="soft-button" id="apiCopy" type="button"><span data-icon="copy"></span>Copiar URL</button>
+              <button class="soft-button" id="apiOpen" type="button"><span data-icon="external"></span>Abrir health</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-toolbar">
+              <div class="search-field compact">
+                <span data-icon="search"></span>
+                <input id="explorerSearch" type="search" placeholder="Buscar equipo, liga o resultado">
+              </div>
+              <label class="select-field inline">
+                <select id="explorerStatus">
+                  <option value="">Todos los estados</option>
+                  <option value="finished">Finalizados</option>
+                  <option value="inprogress">En vivo</option>
+                  <option value="notstarted">Próximos</option>
+                </select>
+              </label>
+              <button class="soft-button" id="explorerApply" type="button">Buscar</button>
+              <span class="panel-count" id="explorerCount"></span>
+            </div>
+            <div class="table-wrap tall">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Competición</th>
+                    <th>Local</th>
+                    <th>Visitante</th>
+                    <th class="num">Marcador</th>
+                    <th>Estado</th>
+                    <th>Pronóstico</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="explorerBody"></tbody>
+              </table>
+            </div>
+            <div class="panel-footer" id="explorerFooter"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-model">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Inteligencia</p>
+            <h1>Modelo neuronal</h1>
+            <p class="page-subtitle">Estado del modelo activo, error por mercado y peso de la red en la simulación.</p>
+          </div>
+          <div class="page-actions">
+            <button class="soft-button" id="modelRefresh" type="button"><span data-icon="refresh"></span>Actualizar</button>
+          </div>
+        </div>
+        <div id="modelContent"></div>
+      </section>
+
+      <footer class="statusbar">
+        <span class="status-left"><span class="status-dot" id="statusDot"></span><span id="statusText">Iniciando…</span></span>
+        <span class="status-right" id="statusMeta"></span>
+      </footer>
+    </main>
+  </div>
+
+  <div class="modal-root" id="modalRoot" hidden></div>
+  <div class="toast-root" id="toastRoot" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
