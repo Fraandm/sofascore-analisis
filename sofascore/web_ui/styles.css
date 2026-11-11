@@ -3443,12 +3443,30 @@ svg {
   grid-template-columns: minmax(0, 1fr) 280px;
   gap: 14px;
   align-items: start;
+  width: 100%;
+  max-width: 1320px;
+  margin-inline: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+#view-previews .page-head {
+  width: 100%;
+  max-width: 1320px;
+  margin-inline: auto;
+}
+
+#view-previews.is-active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .preview-panel {
   display: flex;
   flex-direction: column;
-  min-height: 620px;
+  height: 100%;
+  min-height: 0;
 }
 
 .preview-toolbar {
@@ -3482,14 +3500,14 @@ svg {
 .preview-frame-wrap {
   position: relative;
   flex: 1;
-  min-height: 560px;
+  min-height: 0;
   background: #f7f9fb;
 }
 
 .preview-frame-wrap iframe {
   width: 100%;
   height: 100%;
-  min-height: 560px;
+  min-height: 0;
   border: 0;
   background: #f7f9fb;
   display: block;
@@ -4767,6 +4785,36 @@ svg {
 
   .status-right {
     display: none;
+  }
+
+  #view-previews.is-active {
+    overflow: auto;
+  }
+
+  .preview-layout {
+    flex: none;
+    max-width: none;
+    min-height: 620px;
+  }
+
+  .preview-panel {
+    height: auto;
+    min-height: 620px;
+  }
+}
+
+@media (max-height: 760px) {
+  #view-previews.is-active {
+    overflow: auto;
+  }
+
+  .preview-layout {
+    flex: none;
+    min-height: 560px;
+  }
+
+  .preview-panel {
+    min-height: 560px;
   }
 }
 
