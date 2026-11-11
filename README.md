@@ -27,6 +27,22 @@ powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
 
 El script instala PyInstaller si hace falta y deja el nuevo `SofaScore.exe` en la raíz del proyecto.
 
+### Instalador
+
+También hay un instalador para Windows disponible en **GitHub Releases**:
+
+```text
+https://github.com/Fraandm/sofascore-analisis/releases
+```
+
+El instalador es **por usuario**, no pide permisos de administrador, crea los accesos directos y incluye desinstalador. Para generarlo localmente:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_installer.ps1
+```
+
+El resultado queda en `dist-installer\SofaScore-Setup-<versión>.exe`, junto con `SHA256SUMS.txt`.
+
 ---
 
 ## Características
@@ -56,6 +72,7 @@ El script instala PyInstaller si hace falta y deja el nuevo `SofaScore.exe` en l
 - **Simulación Monte Carlo con NumPy**: miles de escenarios para estimar distribuciones, percentiles, probabilidades 1X2, ambos marcan, over/under y matriz de marcadores.
 - **Interfaz web local HTML5/CSS/JS** para elegir el partido, la ventana de partidos y exportar el análisis, con **siete temas visuales**, búsqueda instantánea, filtros, atajos de teclado, gráficos propios y diseño adaptable. Incluye **modo clásico de Tkinter** como respaldo.
 - **Ejecutable para Windows** que se abre con doble clic desde el Explorador.
+- **Instalador por usuario** con accesos directos y desinstalador, publicado en GitHub Releases; las releases se generan automáticamente con un tag `v*`.
 - Fechas en la zona horaria del usuario (`--timezone`), no en la ventana UTC que usa la API.
 - Caché en disco, reintentos con backoff, límite de peticiones y soporte de proxy.
 - Salida legible por humanos o lista para Excel/CSV.
