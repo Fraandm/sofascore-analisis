@@ -586,6 +586,20 @@ async function api(path, options = {}) {
 /* --------------------------------------------------------------------------
    Estado visual y avisos
    -------------------------------------------------------------------------- */
+function updateControlStates() {
+  $$("#statusChips .chip").forEach((chip) => {
+    const key = chip.dataset.status;
+    const active = key === "all" ? state.status === "all" : state.status === key;
+    chip.classList.toggle("is-active", active);
+    chip.setAttribute("aria-pressed", String(active));
+  });
+  $$("#liveFilters button").forEach((button) => {
+    const active = state.liveFilter === button.dataset.liveFilter;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
 function setStatus(message, kind = "ok") {
   const text = $("#statusText");
   const dot = $("#statusDot");
@@ -600,6 +614,14 @@ function setStatus(message, kind = "ok") {
 function setBusy(delta) {
   state.busy = Math.max(0, state.busy + delta);
   if (state.busy > 0) setStatus("Trabajando…", "busy");
+}
+
+function setDetailBusy(busy) {
+  $("#detailPane")?.setAttribute("aria-busy", String(Boolean(busy)));
+}
+
+function setMatchListBusy(busy) {
+  $("#matchList")?.setAttribute("aria-busy", String(Boolean(busy)));
 }
 
 function toast(title, message = "", kind = "info", timeout = 4600) {
@@ -636,6 +658,7 @@ function setTheme(theme, persist = true) {
   if (button) {
     button.innerHTML = `${icon("palette")}<span class="theme-label">Tema: ${esc(definition.label)}</span>`;
     button.title = `Tema actual: ${definition.label}. Pulsa para cambiar.`;
+    button.setAttribute("aria-label", `Tema actual: ${definition.label}. Cambiar tema`);
   }
   if (persist) {
     api("/api/preferences", {
@@ -694,11 +717,42 @@ function openThemePicker() {
 /* --------------------------------------------------------------------------
    Modales
    -------------------------------------------------------------------------- */
+const MODAL_FOCUSABLE = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type='hidden'])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+let lastFocusedElement = null;
+
+function modalFocusable(modal) {
+  return Array.from(modal.querySelectorAll(MODAL_FOCUSABLE)).filter(
+    (element) =>
+      element.getClientRects().length > 0 &&
+      getComputedStyle(element).visibility !== "hidden",
+  );
+}
+
 function openModal({ title, subtitle = "", body = "", footer = "", wide = false, flush = false }) {
   const root = $("#modalRoot");
+  const wasOpen = !root.hidden;
+  if (!wasOpen) {
+    lastFocusedElement =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const shell = $(".app-shell");
+    if (shell) {
+      shell.setAttribute("inert", "");
+      shell.setAttribute("aria-hidden", "true");
+    }
+  }
   root.hidden = false;
   root.innerHTML = `
-    <div class="modal ${wide ? "wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="modal ${wide ? "wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
       <div class="modal-head">
         <div>
           <h2>${esc(title)}</h2>
@@ -714,6 +768,13 @@ function openModal({ title, subtitle = "", body = "", footer = "", wide = false,
   root.querySelectorAll("[data-close-modal]").forEach((button) => {
     button.addEventListener("click", closeModal);
   });
+  const focusFirst = () => {
+    if (!root.contains(modal)) return;
+    const focusable = modalFocusable(modal);
+    (focusable[0] || modal).focus();
+  };
+  focusFirst();
+  setTimeout(focusFirst, 0);
   return modal;
 }
 
@@ -722,9 +783,31 @@ function closeModal() {
   if (!root) return;
   root.hidden = true;
   root.innerHTML = "";
+  const shell = $(".app-shell");
+  if (shell) {
+    shell.removeAttribute("inert");
+    shell.removeAttribute("aria-hidden");
+  }
+  if (lastFocusedElement?.isConnected) {
+    lastFocusedElement.focus();
+  }
+  lastFocusedElement = null;
   if (state.settingsNeedsReload) {
     state.settingsNeedsReload = false;
     loadDay({ refresh: true }).catch(() => {});
+  }
+}
+
+function setSidebarOpen(open) {
+  const sidebar = $("#sidebar");
+  const backdrop = $("#sidebarBackdrop");
+  const button = $("#menuToggle");
+  if (!sidebar) return;
+  sidebar.classList.toggle("is-open", open);
+  if (backdrop) backdrop.hidden = !open;
+  button?.setAttribute("aria-expanded", String(open));
+  if (!open && window.innerWidth <= 820 && sidebar.contains(document.activeElement)) {
+    button?.focus();
   }
 }
 
@@ -856,6 +939,7 @@ async function loadDay({ refresh = false } = {}) {
   state.analysisToken += 1;
   state.simToken += 1;
   state.loadingDay = true;
+  setMatchListBusy(true);
   state.loadingRest = false;
   state.matches = [];
   state.matchesById = new Map();
@@ -903,6 +987,7 @@ async function loadDay({ refresh = false } = {}) {
   } catch (error) {
     if (token !== state.dayToken) return;
     state.loadingDay = false;
+    setMatchListBusy(false);
     setStatus("Error al cargar la fecha.", "error");
     toast("No se pudo cargar la fecha", error.message, "error");
     renderMatchesError(error.message);
@@ -910,11 +995,13 @@ async function loadDay({ refresh = false } = {}) {
   } finally {
     if (token === state.dayToken) {
       state.loadingDay = false;
+      setMatchListBusy(false);
       if (loadingLine) loadingLine.hidden = true;
     }
   }
 
   state.loadingRest = true;
+  setMatchListBusy(true);
   const restBanner2 = $("#restBanner");
   if (restBanner2) restBanner2.hidden = false;
   try {
@@ -946,6 +1033,7 @@ async function loadDay({ refresh = false } = {}) {
   } finally {
     if (token === state.dayToken) {
       state.loadingRest = false;
+      setMatchListBusy(false);
       const banner = $("#restBanner");
       if (banner) banner.hidden = true;
       renderMatches();
@@ -1123,6 +1211,20 @@ function renderMatches() {
   const favoritesCount = state.matches.filter((match) => teamMatchesFavorite(match)).length;
 
   $("#navMatchCount").textContent = state.matches.length ? String(state.matches.length) : "—";
+  const navMatches = document.querySelector('.nav-item[data-view="matches"]');
+  navMatches?.setAttribute(
+    "aria-label",
+    state.matches.length
+      ? `Partidos, ${state.matches.length} partidos cargados`
+      : "Partidos",
+  );
+  const navLive = document.querySelector('.nav-item[data-view="live"]');
+  navLive?.setAttribute(
+    "aria-label",
+    liveCount
+      ? `Sala de directo, ${liveCount} partido${liveCount === 1 ? "" : "s"} en vivo`
+      : "Sala de directo",
+  );
   const navDot = $("#navLiveDot");
   if (navDot) navDot.hidden = liveCount === 0;
   const livePill = $("#livePill");
@@ -1130,6 +1232,12 @@ function renderMatches() {
     livePill.classList.toggle("is-idle", liveCount === 0);
     const text = $("#livePillText");
     if (text) text.textContent = liveCount ? `${liveCount} en vivo` : "En vivo";
+    livePill.setAttribute(
+      "aria-label",
+      liveCount
+        ? `${liveCount} partido${liveCount === 1 ? "" : "s"} en vivo. Abrir sala de directo`
+        : "No hay partidos en vivo. Abrir sala de directo",
+    );
   }
   const count = $("#matchesCount");
   if (count) {
@@ -1208,6 +1316,7 @@ function renderMatches() {
   document.querySelectorAll(".match-row").forEach((row) => {
     row.classList.toggle("is-selected", Number(row.dataset.matchId) === state.selectedId);
   });
+  updateControlStates();
 }
 
 function renderMatchRow(match) {
@@ -1237,12 +1346,12 @@ function renderMatchRow(match) {
       <div class="team-line ${homeLoser ? "is-loser" : ""} ${finished && winner === "home" ? "is-winner" : ""}">
         ${crest(match.home_team)}
         <span class="team-name">${esc(teamName(match.home_team))}</span>
-        <button class="fav-star ${homeFavorite ? "is-fav" : ""}" type="button" data-fav-team="${esc(match.home_team?.id)}" data-fav-name="${esc(teamFullName(match.home_team))}" title="Favorito" aria-label="Marcar ${esc(teamFullName(match.home_team))} como favorito">${icon(homeFavorite ? "star-filled" : "star")}</button>
+        <button class="fav-star ${homeFavorite ? "is-fav" : ""}" type="button" data-fav-team="${esc(match.home_team?.id)}" data-fav-name="${esc(teamFullName(match.home_team))}" title="Favorito" aria-pressed="${homeFavorite}" aria-label="${homeFavorite ? "Quitar" : "Marcar"} ${esc(teamFullName(match.home_team))} ${homeFavorite ? "de" : "como"} favorito">${icon(homeFavorite ? "star-filled" : "star")}</button>
       </div>
       <div class="team-line ${awayLoser ? "is-loser" : ""} ${finished && winner === "away" ? "is-winner" : ""}">
         ${crest(match.away_team)}
         <span class="team-name">${esc(teamName(match.away_team))}</span>
-        <button class="fav-star ${awayFavorite ? "is-fav" : ""}" type="button" data-fav-team="${esc(match.away_team?.id)}" data-fav-name="${esc(teamFullName(match.away_team))}" title="Favorito" aria-label="Marcar ${esc(teamFullName(match.away_team))} como favorito">${icon(awayFavorite ? "star-filled" : "star")}</button>
+        <button class="fav-star ${awayFavorite ? "is-fav" : ""}" type="button" data-fav-team="${esc(match.away_team?.id)}" data-fav-name="${esc(teamFullName(match.away_team))}" title="Favorito" aria-pressed="${awayFavorite}" aria-label="${awayFavorite ? "Quitar" : "Marcar"} ${esc(teamFullName(match.away_team))} ${awayFavorite ? "de" : "como"} favorito">${icon(awayFavorite ? "star-filled" : "star")}</button>
       </div>
     </div>
     <div class="match-score">
@@ -1264,6 +1373,7 @@ function selectMatch(matchId) {
 function selectMatchObject(match, { autoAnalyze = true } = {}) {
   state.analysisToken += 1;
   state.simToken += 1;
+  setDetailBusy(false);
   state.selectedId = match.id;
   state.selectedMatch = match;
   state.analysis = null;
@@ -1289,6 +1399,7 @@ function selectMatchObject(match, { autoAnalyze = true } = {}) {
 function clearSelection() {
   state.analysisToken += 1;
   state.simToken += 1;
+  setDetailBusy(false);
   state.selectedId = null;
   state.selectedMatch = null;
   state.analysis = null;
@@ -1303,21 +1414,25 @@ function clearSelection() {
 }
 
 async function openMatchById(matchId, { switchDate = true } = {}) {
+  if (matchId === null || matchId === undefined || matchId === "") return;
   setStatus("Cargando partido…", "busy");
   try {
     const detail = await api(`/api/match?id=${encodeURIComponent(matchId)}`);
     const match = detail.match;
     if (!match) throw new Error("Partido no disponible.");
     const day = matchDay(match);
+    setStatus(`Partido cargado: ${teamName(match.home_team)} vs ${teamName(match.away_team)}.`);
     if (switchDate && day && day !== state.date) {
       state.date = day;
       const input = $("#dateInput");
       if (input) input.value = day;
       updateDayCaption();
-      await loadDay();
+      const pending = loadDay();
+      selectMatchObject({ ...match });
+      await pending;
+    } else {
+      selectMatchObject({ ...(state.matchesById.get(match.id) || {}), ...match });
     }
-    selectMatchObject({ ...(state.matchesById.get(match.id) || {}), ...match });
-    setStatus(`Partido cargado: ${teamName(match.home_team)} vs ${teamName(match.away_team)}.`);
   } catch (error) {
     toast("No se pudo abrir el partido", error.message, "error");
     setStatus("Error al abrir el partido.", "error");
@@ -1339,7 +1454,7 @@ function renderDetail({ scrollTop = null } = {}) {
   }
   empty.hidden = true;
   content.hidden = false;
-  content.innerHTML = renderHero(state.selectedMatch) + renderTabs() + `<div class="tab-panel">${renderTabContent()}</div>`;
+  content.innerHTML = renderHero(state.selectedMatch) + renderTabs() + `<div class="tab-panel" id="tab-panel-${state.detailTab}" role="tabpanel" tabindex="0" aria-labelledby="tab-${state.detailTab}">${renderTabContent()}</div>`;
   pane.scrollTop = preserve;
 }
 
@@ -1362,7 +1477,7 @@ function renderHero(match) {
         ${match.home_team?.id ? crest(match.home_team, "hero-crest") : `<span class="hero-crest-fallback">${esc(initials(match.home_team))}</span>`}
         <div class="hero-team-name">${esc(teamFullName(match.home_team))}</div>
         <div class="hero-team-sub">
-          <button class="fav-star ${homeFavorite ? "is-fav" : ""}" type="button" data-fav-team="${esc(match.home_team?.id)}" data-fav-name="${esc(teamFullName(match.home_team))}" title="Favorito">${icon(homeFavorite ? "star-filled" : "star")}</button>
+          <button class="fav-star ${homeFavorite ? "is-fav" : ""}" type="button" data-fav-team="${esc(match.home_team?.id)}" data-fav-name="${esc(teamFullName(match.home_team))}" title="Favorito" aria-pressed="${homeFavorite}" aria-label="${homeFavorite ? "Quitar" : "Marcar"} ${esc(teamFullName(match.home_team))} ${homeFavorite ? "de" : "como"} favorito">${icon(homeFavorite ? "star-filled" : "star")}</button>
           <span>${esc(match.home_team?.country || "Local")}</span>
         </div>
       </div>
@@ -1375,7 +1490,7 @@ function renderHero(match) {
         <div class="hero-team-name">${esc(teamFullName(match.away_team))}</div>
         <div class="hero-team-sub">
           <span>${esc(match.away_team?.country || "Visitante")}</span>
-          <button class="fav-star ${awayFavorite ? "is-fav" : ""}" type="button" data-fav-team="${esc(match.away_team?.id)}" data-fav-name="${esc(teamFullName(match.away_team))}" title="Favorito">${icon(awayFavorite ? "star-filled" : "star")}</button>
+          <button class="fav-star ${awayFavorite ? "is-fav" : ""}" type="button" data-fav-team="${esc(match.away_team?.id)}" data-fav-name="${esc(teamFullName(match.away_team))}" title="Favorito" aria-pressed="${awayFavorite}" aria-label="${awayFavorite ? "Quitar" : "Marcar"} ${esc(teamFullName(match.away_team))} ${awayFavorite ? "de" : "como"} favorito">${icon(awayFavorite ? "star-filled" : "star")}</button>
         </div>
       </div>
     </div>
@@ -1400,11 +1515,11 @@ function renderTabs() {
   ];
   const lineupCount = (state.analysis?.lineups?.home?.players || []).filter((player) => !player.substitute).length +
     (state.analysis?.lineups?.away?.players || []).filter((player) => !player.substitute).length;
-  return `<div class="tabs" role="tablist">
+  return `<div class="tabs" role="tablist" aria-label="Detalle del partido">
     ${tabs
       .map(
         ([key, label]) =>
-          `<button class="tab ${state.detailTab === key ? "is-active" : ""}" type="button" data-action="tab" data-tab="${key}" role="tab" aria-selected="${state.detailTab === key}">${label}${key === "lineups" && lineupCount ? `<span class="tab-badge">${lineupCount}</span>` : ""}${key === "context" && state.analysis?.warnings?.length ? `<span class="tab-badge">${state.analysis.warnings.length}</span>` : ""}</button>`,
+          `<button class="tab ${state.detailTab === key ? "is-active" : ""}" id="tab-${key}" type="button" data-action="tab" data-tab="${key}" role="tab" aria-selected="${state.detailTab === key}" aria-controls="tab-panel-${key}" tabindex="${state.detailTab === key ? "0" : "-1"}">${label}${key === "lineups" && lineupCount ? `<span class="tab-badge">${lineupCount}</span>` : ""}${key === "context" && state.analysis?.warnings?.length ? `<span class="tab-badge">${state.analysis.warnings.length}</span>` : ""}</button>`,
       )
       .join("")}
   </div>`;
@@ -1449,9 +1564,9 @@ function renderAnalysisCTA(running = false) {
     const percent = progress.total
       ? Math.min(100, Math.round((progress.done / progress.total) * 100))
       : 8;
-    return `<div class="sim-progress" id="analysisProgress">
+    return `<div class="sim-progress" id="analysisProgress" role="status" aria-live="polite">
       <div class="sim-progress-top"><span>${esc(progress.message || "Analizando la forma de ambos equipos…")}</span><span>${percent}%</span></div>
-      <div class="progress-track"><div class="progress-fill" style="width:${Math.max(6, percent)}%"></div></div>
+      <div class="progress-track" role="progressbar" aria-label="Progreso del análisis" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><div class="progress-fill" style="width:${Math.max(6, percent)}%"></div></div>
     </div>
     <div class="sim-empty">${icon("sparkles")}<div style="margin-top:8px">Consultando partidos, estadísticas, alineaciones y árbitro. Suele tardar unos segundos.</div></div>`;
   }
@@ -1460,7 +1575,7 @@ function renderAnalysisCTA(running = false) {
     <h3 style="margin:0;font-family:var(--font-display);font-size:20px;letter-spacing:-.035em">Analiza este partido</h3>
     <p style="color:var(--muted);font-size:12px;max-width:380px;margin:7px auto 15px">Verás la forma reciente, la comparación de estadísticas, las alineaciones y el árbitro. Después podrás simular el resultado.</p>
     <div style="display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap">
-      <label class="select-field inline">Ventana <select id="analysisWindowSelect">${windowOptions(state.analysisWindow)}</select></label>
+      <label class="select-field inline">Ventana <select id="analysisWindowSelect" aria-label="Ventana de análisis">${windowOptions(state.analysisWindow)}</select></label>
       <button class="primary-button" type="button" data-action="analyze">${icon("sparkles")}Analizar partido</button>
     </div>
   </div>`;
@@ -1483,6 +1598,7 @@ async function analyzeMatch(force = false) {
     status: "running",
     progress: { done: 0, total: 1, message: "Iniciando el análisis…" },
   };
+  setDetailBusy(true);
   renderDetail();
   setStatus("Analizando la forma de ambos equipos…", "busy");
   try {
@@ -1506,6 +1622,7 @@ async function analyzeMatch(force = false) {
     if (token !== state.analysisToken) return null;
     state.analysis = result;
     state.analysisJob = null;
+    setDetailBusy(false);
     if (result?.match) {
       state.selectedMatch = { ...state.selectedMatch, ...result.match };
       state.matchesById.set(result.match.id, {
@@ -1524,6 +1641,7 @@ async function analyzeMatch(force = false) {
   } catch (error) {
     if (token !== state.analysisToken) return null;
     state.analysisJob = { status: "error", error: error.message };
+    setDetailBusy(false);
     renderDetail();
     setStatus("No se pudo analizar el partido.", "error");
     toast("No se pudo analizar", error.message, "error");
@@ -1547,6 +1665,8 @@ function updateAnalysisProgress(job) {
   if (text) text.textContent = progress.message || "Analizando…";
   if (value) value.textContent = `${percent}%`;
   if (fill) fill.style.width = `${Math.max(6, percent)}%`;
+  const track = banner.querySelector(".progress-track");
+  track?.setAttribute("aria-valuenow", String(percent));
 }
 
 async function pollJob(jobId, onUpdate, active) {
@@ -1582,7 +1702,7 @@ function renderOverview() {
     <div class="overview-toolbar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <span class="inline-note">${icon("clock")}Ventana: ${esc(windowText)} · ${esc(analysis.generated_at ? new Date(analysis.generated_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "")}</span>
       <span style="flex:1"></span>
-      <label class="select-field inline">Cambiar <select id="analysisWindowSelect">${windowOptions(analysis.window)}</select></label>
+      <label class="select-field inline">Cambiar <select id="analysisWindowSelect" aria-label="Cambiar ventana de análisis">${windowOptions(analysis.window)}</select></label>
       <button class="soft-button" type="button" data-action="export-analysis-json">${icon("download")}JSON</button>
       <button class="soft-button" type="button" data-action="export-analysis-csv">${icon("download")}CSV</button>
     </div>
@@ -1733,7 +1853,7 @@ function renderTeamBlock(block, name, side) {
     .map((row) => {
       const outcome = row.outcome || "E";
       const score = row.score || scoreShort(row);
-      return `<div class="match-mini-row" data-open-match="${esc(row.event_id || row.id || "")}" style="cursor:pointer">
+      return `<div class="match-mini-row" data-open-match="${esc(row.event_id || row.id || "")}" tabindex="0" role="button" aria-label="Abrir ${esc(row.opponent || row.team || "partido")} ${esc(score)}" style="cursor:pointer">
         <span class="match-mini-date">${esc(String(row.date || "").slice(5))}</span>
         <span class="match-mini-teams">${esc(row.home ? "" : "vs ")}${esc(row.opponent || row.team || "—")}</span>
         <span class="match-mini-score">${esc(score)}</span>
@@ -1786,9 +1906,9 @@ function renderSimulation() {
   const seed = state.simulation?.meta?.seed ?? 42;
   const running = state.simJob?.status === "running";
   const controls = `<div class="sim-controls">
-    <label class="control-field"><span>Simulaciones</span><select id="simIterations" ${running ? "disabled" : ""}>${iterationOptions.map((value) => `<option value="${value}" ${value === currentIterations ? "selected" : ""}>${value.toLocaleString("es-ES")}</option>`).join("")}</select></label>
-    <label class="control-field" style="width:86px"><span>Semilla</span><input id="simSeed" type="number" value="${esc(seed)}" ${running ? "disabled" : ""}></label>
-    <label class="control-field"><span>Ventana</span><select id="simWindow" ${running ? "disabled" : ""}>${windowOptions(analysis.window)}</select></label>
+    <label class="control-field"><span>Simulaciones</span><select id="simIterations" aria-label="Número de simulaciones" ${running ? "disabled" : ""}>${iterationOptions.map((value) => `<option value="${value}" ${value === currentIterations ? "selected" : ""}>${value.toLocaleString("es-ES")}</option>`).join("")}</select></label>
+    <label class="control-field" style="width:86px"><span>Semilla</span><input id="simSeed" type="number" value="${esc(seed)}" aria-label="Semilla aleatoria" ${running ? "disabled" : ""}></label>
+    <label class="control-field"><span>Ventana</span><select id="simWindow" aria-label="Ventana de análisis para la simulación" ${running ? "disabled" : ""}>${windowOptions(analysis.window)}</select></label>
     <button class="primary-button" type="button" data-action="run-simulation" ${running ? "disabled" : ""}>${icon(running ? "refresh" : "play")}${running ? "Simulando…" : state.simulation ? "Volver a simular" : "Simular partido"}</button>
     <button class="soft-button" type="button" data-action="clear-cache" ${running ? "disabled" : ""}>${icon("trash")}Vaciar caché</button>
   </div>
@@ -1831,9 +1951,9 @@ function simulationContext() {
 function renderSimulationProgress() {
   const progress = state.simJob?.progress || {};
   const percent = progress.total ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 8;
-  return `<div class="sim-progress" id="simulationProgress">
+  return `<div class="sim-progress" id="simulationProgress" role="status" aria-live="polite">
     <div class="sim-progress-top"><span>${esc(progress.message || "Simulando…")}</span><span>${percent}%</span></div>
-    <div class="progress-track"><div class="progress-fill" style="width:${Math.max(6, percent)}%"></div></div>
+    <div class="progress-track" role="progressbar" aria-label="Progreso de la simulación" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><div class="progress-fill" style="width:${Math.max(6, percent)}%"></div></div>
   </div>`;
 }
 
@@ -1899,7 +2019,7 @@ function renderSimulationResults(summary) {
       </div>
       <div class="chart-card">
         <div class="chart-head"><h4>Distribución</h4>
-          <select class="settings-select" id="simHistogramSelect" style="margin-left:auto;height:28px;font-size:10px">
+          <select class="settings-select" id="simHistogramSelect" aria-label="Métrica de la distribución" style="margin-left:auto;height:28px;font-size:10px">
             ${histogramOptions(state.simMetric)}
           </select>
         </div>
@@ -1908,7 +2028,7 @@ function renderSimulationResults(summary) {
       </div>
       <div class="chart-card">
         <div class="chart-head"><h4>Mercados over/under</h4>
-          <select class="settings-select" id="simMarketSelect" style="margin-left:auto;height:28px;font-size:10px">
+          <select class="settings-select" id="simMarketSelect" aria-label="Mercado over/under" style="margin-left:auto;height:28px;font-size:10px">
             ${marketOptions(state.simMarket)}
           </select>
         </div>
@@ -2155,7 +2275,7 @@ function renderValidation(actual, summary) {
     })
     .join("");
   return `<div style="font-size:10.5px;color:var(--muted);margin-bottom:7px">${live ? `En vivo · minuto ${Math.round(actual.minute || 0)} · marcador ${esc(actual.score || "—")}` : `Resultado real: ${esc(actual.score || "—")}`}</div>
-    <div style="overflow-x:auto"><table class="validation-table"><thead><tr><th>Métrica</th><th class="num">Real</th><th class="num">Esperado</th><th class="num">Error</th><th class="num">P10–P90</th><th class="num">Dentro</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div style="overflow-x:auto"><table class="validation-table"><thead><tr><th scope="col">Métrica</th><th scope="col" class="num">Real</th><th scope="col" class="num">Esperado</th><th scope="col" class="num">Error</th><th scope="col" class="num">P10–P90</th><th scope="col" class="num">Dentro</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 async function runSimulation() {
@@ -2174,6 +2294,7 @@ async function runSimulation() {
     status: "running",
     progress: { done: 0, total: 3, message: "Preparando la simulación…" },
   };
+  setDetailBusy(true);
   renderDetail();
   setStatus(`Simulando ${iterations.toLocaleString("es-ES")} escenarios…`, "busy");
   try {
@@ -2199,6 +2320,7 @@ async function runSimulation() {
     if (token !== state.simToken) return;
     state.simulation = result.summary;
     state.simJob = null;
+    setDetailBusy(false);
     state.simMetric = "goals";
     state.simMarket = "goals";
     state.preview = null;
@@ -2237,6 +2359,7 @@ async function runSimulation() {
   } catch (error) {
     if (token !== state.simToken) return;
     state.simJob = { status: "error", error: error.message };
+    setDetailBusy(false);
     renderDetail();
     setStatus("No se pudo completar la simulación.", "error");
     toast("No se pudo simular", error.message, "error");
@@ -2254,6 +2377,8 @@ function updateSimulationProgress(job) {
   if (text) text.textContent = progress.message || "Simulando…";
   if (value) value.textContent = `${percent}%`;
   if (fill) fill.style.width = `${Math.max(6, percent)}%`;
+  const track = banner.querySelector(".progress-track");
+  track?.setAttribute("aria-valuenow", String(percent));
 }
 
 /* --------------------------------------------------------------------------
@@ -2335,7 +2460,7 @@ function renderStandings(standings, match) {
     ["home", match.home_team, "Local"],
     ["away", match.away_team, "Visitante"],
   ];
-  return `<table class="validation-table"><thead><tr><th>Equipo</th><th class="num">Pos.</th><th class="num">Pts</th><th class="num">PJ</th><th class="num">DG</th><th class="num">Pts/PJ</th></tr></thead><tbody>${rows
+  return `<table class="validation-table"><thead><tr><th scope="col">Equipo</th><th scope="col" class="num">Pos.</th><th scope="col" class="num">Pts</th><th scope="col" class="num">PJ</th><th scope="col" class="num">DG</th><th scope="col" class="num">Pts/PJ</th></tr></thead><tbody>${rows
     .map(([side, team, fallback]) => {
       const data = standings[side];
       if (!data) return `<tr><td>${esc(teamFullName(team) || fallback)}</td><td colspan="5" class="muted">Sin datos</td></tr>`;
@@ -2498,6 +2623,7 @@ function renderLive() {
       ? `Actualizado ${new Date(state.lastLiveAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
       : "Esperando datos…";
   }
+  updateControlStates();
 }
 
 function renderLiveCard(match) {
@@ -2650,6 +2776,8 @@ async function loadJournal(force = false) {
     return;
   }
   setStatus("Cargando el cuaderno…", "busy");
+  const panel = $("#journalBody")?.closest(".panel");
+  panel?.setAttribute("aria-busy", "true");
   try {
     const [predictions, accuracy] = await Promise.all([
       api("/api/predictions?limit=1000"),
@@ -2665,12 +2793,14 @@ async function loadJournal(force = false) {
     });
     state.journalLoaded = true;
     renderJournal();
+    panel?.setAttribute("aria-busy", "false");
     setStatus(
       state.predictions.length === 1
         ? "1 predicción en el cuaderno."
         : `${state.predictions.length} predicciones en el cuaderno.`,
     );
   } catch (error) {
+    panel?.setAttribute("aria-busy", "false");
     toast("No se pudo cargar el cuaderno", error.message, "error");
     setStatus("Error al cargar el cuaderno.", "error");
   }
@@ -2722,7 +2852,7 @@ function renderJournal() {
             <td class="num">${pick ? esc(pct(pick.probability, 0)) : "—"}</td>
             <td class="num"><span class="score-pill ${prediction.actual_status === "finished" ? "finished" : prediction.actual_status === "live" ? "live" : ""}">${esc(prediction.actual_score || "—")}</span></td>
             <td>${status}</td>
-            <td><button class="row-action" type="button" data-open-match="${esc(prediction.match_id)}" title="Abrir partido">${icon("external")}</button></td>
+            <td><button class="row-action" type="button" data-open-match="${esc(prediction.match_id)}" title="Abrir partido" aria-label="Abrir partido">${icon("external")}</button></td>
           </tr>`;
         })
         .join("")
@@ -2774,6 +2904,8 @@ function predictionHit(prediction) {
    -------------------------------------------------------------------------- */
 async function loadExplorer() {
   setStatus("Cargando el explorador…", "busy");
+  const panel = $("#explorerBody")?.closest(".panel");
+  panel?.setAttribute("aria-busy", "true");
   try {
     const [matches, predictions] = await Promise.all([
       api(`/api/history/matches?${new URLSearchParams({ query: state.explorerQuery, status: state.explorerStatus, limit: "500" }).toString()}`),
@@ -2787,8 +2919,10 @@ async function loadExplorer() {
     state.latestPredictions = { ...state.latestPredictions, ...latest };
     state.explorerLoaded = true;
     renderExplorer();
+    panel?.setAttribute("aria-busy", "false");
     setStatus(`${state.explorerMatches.length} partidos en el historial local.`);
   } catch (error) {
+    panel?.setAttribute("aria-busy", "false");
     toast("No se pudo cargar el explorador", error.message, "error");
     setStatus("Error al cargar el explorador.", "error");
   }
@@ -2811,7 +2945,7 @@ function renderExplorer() {
             <td class="num"><span class="score-pill ${match.status === "finished" ? "finished" : match.status === "inprogress" ? "live" : ""}">${match.home_score !== null && match.home_score !== undefined ? `${esc(match.home_score)}-${esc(match.away_score)}` : "—"}</span></td>
             <td>${esc(status)}</td>
             <td>${pick ? `<span class="probability-pill">${esc(pick.name)} · ${esc(pct(pick.probability, 0))}</span>` : "—"}</td>
-            <td><button class="row-action" type="button" data-open-match="${esc(match.id)}" title="Abrir partido">${icon("external")}</button></td>
+            <td><button class="row-action" type="button" data-open-match="${esc(match.id)}" title="Abrir partido" aria-label="Abrir partido">${icon("external")}</button></td>
           </tr>`;
         })
         .join("")
@@ -2854,12 +2988,16 @@ async function clearHistory() {
    Modelo
    -------------------------------------------------------------------------- */
 async function loadModel() {
+  const container = $("#modelContent");
+  container?.setAttribute("aria-busy", "true");
   try {
     const payload = await api("/api/model");
     state.model = payload;
     updateModelMini();
     renderModel();
+    container?.setAttribute("aria-busy", "false");
   } catch (error) {
+    container?.setAttribute("aria-busy", "false");
     toast("No se pudo cargar el modelo", error.message, "error");
   }
 }
@@ -2901,7 +3039,7 @@ function renderModel() {
     </div>
     <div class="card card-pad">
       <div class="section-title">${icon("chart")}Error por mercado</div>
-      <div style="overflow-x:auto"><table class="mae-table"><thead><tr><th>Mercado</th><th class="num">Red</th><th class="num">Base</th><th class="num">Resultado</th></tr></thead><tbody>${maeRows || '<tr><td colspan="4">Sin métricas.</td></tr>'}</tbody></table></div>
+      <div style="overflow-x:auto"><table class="mae-table"><thead><tr><th scope="col">Mercado</th><th scope="col" class="num">Red</th><th scope="col" class="num">Base</th><th scope="col" class="num">Resultado</th></tr></thead><tbody>${maeRows || '<tr><td colspan="4">Sin métricas.</td></tr>'}</tbody></table></div>
       <div class="inline-note" style="margin-top:8px">${icon("info")}MAE: error absoluto medio. Cuanto menor, mejor.</div>
     </div>
   </div>
@@ -2956,30 +3094,30 @@ function openSettings() {
       <div class="theme-grid" id="settingsThemeGrid">${renderThemeCards(state.theme)}</div>
       <div class="setting-row" style="margin-top:6px">
         <div class="setting-copy"><strong>Analizar al abrir</strong><span>Lanza el análisis automáticamente al seleccionar un partido.</span></div>
-        <label class="switch"><input type="checkbox" id="settingAutoAnalyze" ${prefs.auto_analyze !== false ? "checked" : ""}><span></span></label>
+        <label class="switch"><input type="checkbox" id="settingAutoAnalyze" aria-label="Analizar al abrir" ${prefs.auto_analyze !== false ? "checked" : ""}><span></span></label>
       </div>
     </div>
     <div class="settings-section">
       <h3>Datos y directo</h3>
       <div class="setting-row">
         <div class="setting-copy"><strong>Zona horaria</strong><span>Se aplica a las horas y a la fecha de los partidos.</span></div>
-        <select class="settings-select" id="settingTimezone">${(state.boot?.timezones || []).map((timezone) => `<option value="${esc(timezone)}" ${timezone === state.timezone ? "selected" : ""}>${esc(timezone)}</option>`).join("")}</select>
+        <select class="settings-select" id="settingTimezone" aria-label="Zona horaria">${(state.boot?.timezones || []).map((timezone) => `<option value="${esc(timezone)}" ${timezone === state.timezone ? "selected" : ""}>${esc(timezone)}</option>`).join("")}</select>
       </div>
       <div class="setting-row">
         <div class="setting-copy"><strong>Región</strong><span>Europa, Sudamérica o ambas.</span></div>
-        <select class="settings-select" id="settingRegion">${(state.boot?.regions || []).map((region) => `<option value="${esc(region.key)}" ${region.key === state.region ? "selected" : ""}>${esc(region.label)}</option>`).join("")}</select>
+        <select class="settings-select" id="settingRegion" aria-label="Región">${(state.boot?.regions || []).map((region) => `<option value="${esc(region.key)}" ${region.key === state.region ? "selected" : ""}>${esc(region.label)}</option>`).join("")}</select>
       </div>
       <div class="setting-row">
         <div class="setting-copy"><strong>Competiciones</strong><span>Principales o todas las disponibles.</span></div>
-        <select class="settings-select" id="settingCompetitions">${(state.boot?.competitions || []).map((competition) => `<option value="${esc(competition.key)}" ${competition.key === state.competitions ? "selected" : ""}>${esc(competition.label)}</option>`).join("")}</select>
+        <select class="settings-select" id="settingCompetitions" aria-label="Competiciones">${(state.boot?.competitions || []).map((competition) => `<option value="${esc(competition.key)}" ${competition.key === state.competitions ? "selected" : ""}>${esc(competition.label)}</option>`).join("")}</select>
       </div>
       <div class="setting-row">
         <div class="setting-copy"><strong>Auto en vivo</strong><span>Actualiza los marcadores cada 45 segundos.</span></div>
-        <label class="switch"><input type="checkbox" id="settingAutoLive" ${prefs.auto_live !== false ? "checked" : ""}><span></span></label>
+        <label class="switch"><input type="checkbox" id="settingAutoLive" aria-label="Actualización automática en vivo" ${prefs.auto_live !== false ? "checked" : ""}><span></span></label>
       </div>
       <div class="setting-row">
         <div class="setting-copy"><strong>Alertas de favoritos</strong><span>Avisa cuando cambia el marcador de un equipo favorito.</span></div>
-        <label class="switch"><input type="checkbox" id="settingAlerts" ${prefs.alerts !== false ? "checked" : ""}><span></span></label>
+        <label class="switch"><input type="checkbox" id="settingAlerts" aria-label="Alertas de favoritos" ${prefs.alerts !== false ? "checked" : ""}><span></span></label>
       </div>
     </div>
     <div class="settings-section">
@@ -3078,7 +3216,7 @@ function openTeamSearch() {
   const modal = openModal({
     title: "Buscar equipo",
     subtitle: "Encuentra un equipo y consulta sus últimos y próximos partidos.",
-    body: `<div class="team-search-box">${icon("search")}<input id="teamSearchInput" type="search" placeholder="Escribe el nombre de un equipo…" autocomplete="off"></div>
+    body: `<div class="team-search-box">${icon("search")}<input id="teamSearchInput" type="search" placeholder="Escribe el nombre de un equipo…" autocomplete="off" aria-label="Buscar equipo"></div>
       <div class="search-results" id="teamResults"><div class="empty-state compact"><p>Escribe al menos dos letras.</p></div></div>`,
     footer: `<button class="soft-button" type="button" data-close-modal>Cerrar</button>`,
   });
@@ -3124,14 +3262,14 @@ async function openTeamMatches(teamId, teamNameValue, modal) {
     const payload = await api(`/api/team/matches?id=${encodeURIComponent(teamId)}&limit=40`);
     const matches = payload.matches || [];
     body.innerHTML = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <button class="icon-button" type="button" id="teamBack" title="Volver">${icon("arrow-left")}</button>
+        <button class="icon-button" type="button" id="teamBack" title="Volver" aria-label="Volver a la búsqueda de equipos">${icon("arrow-left")}</button>
         ${crest({ id: teamId, name: teamNameValue }, "crest")}
         <strong style="font-size:13px">${esc(teamNameValue)}</strong>
         <span class="panel-count" style="margin-left:auto">${matches.length} partidos</span>
       </div>
       <div class="team-match-list">${matches.length ? matches.map((match) => {
         const status = statusInfo(match);
-        return `<div class="team-match-row" data-open-match="${esc(match.id)}">
+        return `<div class="team-match-row" data-open-match="${esc(match.id)}" tabindex="0" role="button" aria-label="Abrir ${esc(teamName(match.home_team))} contra ${esc(teamName(match.away_team))}">
           <span class="team-match-date">${esc(formatDate(matchDay(match)))}</span>
           <span>${isLive(match) ? '<span class="live-dot" style="color:var(--live)"></span>' : isFinished(match) ? "✓" : "•"}</span>
           <span class="team-match-main">${esc(teamName(match.home_team))} vs ${esc(teamName(match.away_team))}<span class="team-match-comp">${esc(match.tournament?.name || "")}</span></span>
@@ -3203,7 +3341,10 @@ async function exportSimulation(format) {
 function setView(name, { silent = false } = {}) {
   state.activeView = name;
   $$(".nav-item").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.view === name);
+    const active = button.dataset.view === name;
+    button.classList.toggle("is-active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
   });
   $$(".view").forEach((view) => {
     view.classList.toggle("is-active", view.id === `view-${name}`);
@@ -3243,7 +3384,7 @@ function bindEvents() {
   $$(".nav-item").forEach((button) => {
     button.addEventListener("click", () => {
       setView(button.dataset.view);
-      if (window.innerWidth <= 820) $("#sidebar")?.classList.remove("is-open");
+      if (window.innerWidth <= 820) setSidebarOpen(false);
     });
   });
 
@@ -3326,8 +3467,10 @@ function bindEvents() {
     $("#filterbar")?.classList.toggle("is-collapsed");
   });
   $("#menuToggle")?.addEventListener("click", () => {
-    $("#sidebar")?.classList.toggle("is-open");
+    const sidebar = $("#sidebar");
+    setSidebarOpen(!sidebar?.classList.contains("is-open"));
   });
+  $("#sidebarBackdrop")?.addEventListener("click", () => setSidebarOpen(false));
   $("#modalRoot")?.addEventListener("click", (event) => {
     if (event.target === event.currentTarget) closeModal();
   });
@@ -3347,6 +3490,7 @@ function bindEvents() {
   });
   $("#detailContent")?.addEventListener("click", handleDetailClick);
   $("#detailContent")?.addEventListener("change", handleDetailChange);
+  $("#detailContent")?.addEventListener("keydown", handleDetailKeydown);
 
   $("#liveRefreshButton")?.addEventListener("click", () => refreshLive());
   $("#liveGoMatches")?.addEventListener("click", () => setView("matches"));
@@ -3436,9 +3580,68 @@ function bindEvents() {
 
   document.addEventListener("keydown", (event) => {
     const ctrl = event.ctrlKey || event.metaKey;
+    const modalRoot = $("#modalRoot");
+    if (modalRoot && !modalRoot.hidden) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeModal();
+        return;
+      }
+      if (event.key === "Tab") {
+        const modal = $(".modal", modalRoot);
+        const focusable = modal ? modalFocusable(modal) : [];
+        if (!focusable.length) {
+          event.preventDefault();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!modal.contains(document.activeElement)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+          return;
+        }
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+          return;
+        }
+        if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+          return;
+        }
+      }
+      const openTarget = event.target.closest("[data-open-match]");
+      if (
+        openTarget &&
+        (event.key === "Enter" || event.key === " ") &&
+        !event.target.closest("button, a")
+      ) {
+        event.preventDefault();
+        closeModal();
+        openMatchById(openTarget.dataset.openMatch);
+      }
+      return;
+    }
+    const openTarget = event.target.closest("[data-open-match]");
+    if (
+      openTarget &&
+      (event.key === "Enter" || event.key === " ") &&
+      !event.target.closest("button, a")
+    ) {
+      event.preventDefault();
+      if (openTarget.closest(".modal")) closeModal();
+      openMatchById(openTarget.dataset.openMatch);
+      return;
+    }
     if (event.key === "Escape") {
       if (!$("#modalRoot")?.hidden) {
         closeModal();
+        return;
+      }
+      if (window.innerWidth <= 820 && $("#sidebar")?.classList.contains("is-open")) {
+        setSidebarOpen(false);
         return;
       }
       if (state.activeView === "matches" && state.detailOpen && window.innerWidth <= 1120) {
@@ -3517,8 +3720,8 @@ function bindEvents() {
   });
 
   window.addEventListener("resize", () => {
-    if (window.innerWidth > 1120) {
-      $("#sidebar")?.classList.remove("is-open");
+    if (window.innerWidth > 820) {
+      setSidebarOpen(false);
     }
   });
 }
@@ -3555,6 +3758,7 @@ function handleDetailClick(event) {
   if (action === "tab") {
     state.detailTab = button.dataset.tab;
     renderDetail({ scrollTop: 0 });
+    document.querySelector(`#tab-${state.detailTab}`)?.focus();
     return;
   }
   if (action === "analyze") {
@@ -3621,6 +3825,23 @@ function handleDetailChange(event) {
     state.simMarket = event.target.value;
     renderDetail();
   }
+}
+
+function handleDetailKeydown(event) {
+  const tab = event.target.closest(".tab");
+  if (!tab) return;
+  const tabs = Array.from(document.querySelectorAll(".tabs .tab"));
+  if (!tabs.length) return;
+  const index = tabs.indexOf(tab);
+  let next = null;
+  if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+  else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = tabs.length - 1;
+  if (next === null) return;
+  event.preventDefault();
+  tabs[next].focus();
+  tabs[next].click();
 }
 
 async function clearSimulationCache() {

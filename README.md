@@ -71,6 +71,7 @@ El resultado queda en `dist-installer\SofaScore-Setup-<versión>.exe`, junto con
 - **Alineaciones y árbitro**: etiqueta si la alineación es probable o confirmada, usa los titulares confirmados en la simulación y ajusta tarjetas/faltas con el historial del árbitro.
 - **Simulación Monte Carlo con NumPy**: miles de escenarios para estimar distribuciones, percentiles, probabilidades 1X2, ambos marcan, over/under y matriz de marcadores.
 - **Interfaz web local HTML5/CSS/JS** para elegir el partido, la ventana de partidos y exportar el análisis, con **siete temas visuales**, búsqueda instantánea, filtros, atajos de teclado, gráficos propios y diseño adaptable. Incluye **modo clásico de Tkinter** como respaldo.
+- **Accesibilidad y teclado**: etiquetas ARIA, foco visible, navegación por pestañas con flechas, modales con foco atrapado, estados de carga anunciados y objetivos táctiles mejorados.
 - **Ejecutable para Windows** que se abre con doble clic desde el Explorador.
 - **Instalador por usuario** con accesos directos y desinstalador, publicado en GitHub Releases; las releases se generan automáticamente con un tag `v*`.
 - Fechas en la zona horaria del usuario (`--timezone`), no en la ventana UTC que usa la API.

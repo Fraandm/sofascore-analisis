@@ -296,6 +296,9 @@ class WebHTTPTests(unittest.TestCase):
                     html = response.read().decode("utf-8")
                 self.assertIn("SofaScore", html)
                 self.assertIn("view-matches", html)
+                self.assertIn('class="skip-link"', html)
+                self.assertIn('aria-label="Buscar partidos"', html)
+                self.assertIn('id="sidebarBackdrop"', html)
 
                 with urllib.request.urlopen(base + "/api/health", timeout=5) as response:
                     health = json.loads(response.read().decode("utf-8"))
