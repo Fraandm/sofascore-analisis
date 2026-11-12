@@ -462,8 +462,13 @@ def _fetch_season_events(
     max_pages: int = 6,
     needed: Optional[int] = None,
     before_timestamp: Optional[int] = None,
+    national: bool = False,
 ) -> Dict[int, Dict[str, Any]]:
-    """Descarga los partidos recientes del equipo hasta salir de la temporada."""
+    """Descarga partidos recientes del equipo hasta salir de la temporada.
+
+    Para selecciones no se limita a una temporada: su calendario mezcla
+    eliminatorias, torneos continentales y amistosos de distintos años.
+    """
     found: Dict[int, Dict[str, Any]] = {}
     cutoff = datetime(target_year, 1, 1, tzinfo=timezone.utc).timestamp()
     usable = 0
@@ -480,12 +485,18 @@ def _fetch_season_events(
             if match.get("id") is not None:
                 found[match["id"]] = match
             timestamp = match.get("start_timestamp")
+            season_ok = national or _same_season(match.get("season"), target_year)
+            region_ok = (
+                regions.is_national_match(match)
+                if national
+                else regions.region_for_match(match) is not None
+            )
             if (
                 match.get("status_type") == "finished"
                 and timestamp is not None
                 and (before_timestamp is None or int(timestamp) < int(before_timestamp))
-                and _same_season(match.get("season"), target_year)
-                and regions.region_for_match(match) is not None
+                and season_ok
+                and region_ok
             ):
                 usable += 1
 
@@ -497,7 +508,7 @@ def _fetch_season_events(
             for match in batch
             if match.get("start_timestamp")
         ]
-        if timestamps and min(timestamps) < cutoff:
+        if not national and timestamps and min(timestamps) < cutoff:
             break
         if not payload.get("hasNextPage"):
             break
@@ -512,8 +523,14 @@ def matches_for_team(
     before_timestamp: Optional[int] = None,
     limit: Optional[int] = 10,
     max_pages: int = 6,
+    national: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Partidos terminados del equipo en la temporada y región admitidas."""
+    """Partidos terminados del equipo en la temporada y región admitidas.
+
+    Con ``national=True`` se recogen los últimos partidos de la selección sin
+    exigir que pertenezcan a la misma temporada. Así el análisis funciona con
+    eliminatorias, Nations League, Copa América, Eurocopa o amistosos.
+    """
     target_year = season_start_year(season)
     if target_year is None and before_timestamp:
         target_year = datetime.fromtimestamp(
@@ -529,6 +546,7 @@ def matches_for_team(
         max_pages=max_pages,
         needed=limit,
         before_timestamp=before_timestamp,
+        national=national,
     )
     matches: List[Dict[str, Any]] = []
 
@@ -540,10 +558,14 @@ def matches_for_team(
             continue
         if before_timestamp and int(timestamp) >= int(before_timestamp):
             continue
-        if not _same_season(match.get("season"), target_year):
-            continue
-        if regions.region_for_match(match) is None:
-            continue
+        if national:
+            if not regions.is_national_match(match):
+                continue
+        else:
+            if not _same_season(match.get("season"), target_year):
+                continue
+            if regions.region_for_match(match) is None:
+                continue
         matches.append(match)
 
     matches.sort(key=lambda item: item.get("start_timestamp") or 0, reverse=True)
@@ -814,6 +836,8 @@ def analyze_match(
         "home": match.get("home_team") or {},
         "away": match.get("away_team") or {},
     }
+    national_match = regions.is_national_match(match)
+    scope = "partidos recientes" if national_match else "partidos de la temporada"
 
     selected: Dict[str, List[Dict[str, Any]]] = {}
     for side in ("home", "away"):
@@ -834,6 +858,7 @@ def analyze_match(
             season,
             before_timestamp=before_timestamp,
             limit=limit,
+            national=national_match,
         )
         target_id = match.get("id")
         if target_id is not None:
@@ -841,13 +866,13 @@ def analyze_match(
         if window_value is None and len(rows) > max_all_matches:
             rows = rows[:max_all_matches]
             warnings.append(
-                f"{team_name}: se analizan como máximo {max_all_matches} partidos "
-                "de la temporada."
+                f"{team_name}: se analizan como máximo {max_all_matches} "
+                f"{scope}."
             )
         elif window_value and len(rows) < window_value:
             warnings.append(
                 f"{team_name}: solo hay {len(rows)} partido(s) terminado(s) "
-                f"en la temporada (se pidieron {window_value})."
+                f"en los {scope} (se pidieron {window_value})."
             )
         selected[side] = rows
 

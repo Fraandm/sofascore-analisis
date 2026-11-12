@@ -17,6 +17,7 @@ SofaScore.exe
 *.msi
 *.zip
 training/data/*.jsonl
+training/data/*.tmp
 *.db
 *.sqlite
 .env

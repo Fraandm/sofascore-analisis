@@ -8,8 +8,13 @@ Para reconstruirlos:
 ```bash
 python training/collect_dataset.py
 python training/collect_extra.py
+python training/collect_national.py
 python training/collect_lineups.py
 ```
+
+`dataset_national.jsonl` contiene solo competiciones oficiales de selecciones
+masculinas absolutas. Los amistosos internacionales (`851` y `852`) quedan
+fuera del archivo y el entrenador los ignora aunque aparezcan en otro dataset.
 
 Después puedes entrenar el modelo con:
 

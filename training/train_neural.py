@@ -3,7 +3,8 @@
 Uso:
     python training/train_neural.py
 
-Entrada: ``training/data/dataset.jsonl`` generado por collect_dataset.py.
+Entrada: ``dataset.jsonl``, ``dataset_extra.jsonl`` y
+``dataset_national.jsonl``. Los amistosos internacionales se excluyen siempre.
 Salida: ``sofascore/models/neural_model.npz`` y ``training/metrics.json``.
 """
 
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -23,15 +25,23 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sofascore import neural  # noqa: E402
+from sofascore import neural, regions  # noqa: E402
 
 DATA_PATHS = (
     ROOT / "training" / "data" / "dataset.jsonl",
     ROOT / "training" / "data" / "dataset_extra.jsonl",
+    ROOT / "training" / "data" / "dataset_national.jsonl",
 )
 MODEL_PATH = ROOT / "sofascore" / "models" / "neural_model.npz"
 METRICS_PATH = ROOT / "training" / "metrics.json"
 LINEUPS_PATH = ROOT / "training" / "data" / "lineups.jsonl"
+EXCLUDED_TOURNAMENT_IDS = regions.FRIENDLY_TOURNAMENT_IDS
+NATIONAL_TOURNAMENT_IDS = (
+    regions.NATIONAL_TOURNAMENT_IDS - regions.FRIENDLY_TOURNAMENT_IDS
+)
+NATIONAL_SAMPLE_WEIGHT = max(
+    0.0, float(os.environ.get("SOFASCORE_NATIONAL_WEIGHT", "1.5"))
+)
 
 TARGET_KEYS = (
     "goals_for",
@@ -117,8 +127,20 @@ def build_samples() -> Tuple[np.ndarray, np.ndarray, List[int], Dict[str, Any]]:
                 line = line.strip()
                 if not line:
                     continue
-                record = json.loads(line)
-                by_id[int(record["id"])] = record
+                try:
+                    record = json.loads(line)
+                    record_id = int(record["id"])
+                    tournament_id = int(record.get("tournament_id") or 0)
+                except (ValueError, KeyError, TypeError):
+                    continue
+                if tournament_id in EXCLUDED_TOURNAMENT_IDS:
+                    continue
+                label = str(
+                    record.get("competition") or record.get("tournament_name") or ""
+                ).casefold()
+                if "friendly" in label or "amistoso" in label:
+                    continue
+                by_id[record_id] = record
     records = list(by_id.values())
     records.sort(key=_timestamp)
     print(f"Partidos de entrada: {len(records)}", flush=True)
@@ -143,11 +165,21 @@ def build_samples() -> Tuple[np.ndarray, np.ndarray, List[int], Dict[str, Any]]:
     features: List[np.ndarray] = []
     targets: List[List[float]] = []
     timestamps: List[int] = []
+    national_flags: List[bool] = []
 
     for record in records:
         match_ts = _timestamp(record)
+        if match_ts <= 0:
+            continue
         home_id = int(record["home_team_id"])
         away_id = int(record["away_team_id"])
+        try:
+            tournament_id = int(record.get("tournament_id") or 0)
+        except (TypeError, ValueError):
+            tournament_id = 0
+        is_national = bool(record.get("is_national")) or (
+            tournament_id in NATIONAL_TOURNAMENT_IDS
+        )
         home_rows = team_history.get(home_id, [])
         away_rows = team_history.get(away_id, [])
         table_key = (record.get("tournament_id"), record.get("season_id"))
@@ -185,7 +217,8 @@ def build_samples() -> Tuple[np.ndarray, np.ndarray, List[int], Dict[str, Any]]:
         else:
             h2h_context = {"matches": 0}
 
-        if len(home_rows) >= 3 and len(away_rows) >= 3:
+        minimum_history = 2 if is_national else 3
+        if len(home_rows) >= minimum_history and len(away_rows) >= minimum_history:
             lineup = lineups.get(int(record["id"])) or {}
             features.append(
                 neural.build_feature_vector(
@@ -216,6 +249,7 @@ def build_samples() -> Tuple[np.ndarray, np.ndarray, List[int], Dict[str, Any]]:
                 ]
             )
             timestamps.append(int(match_ts))
+            national_flags.append(is_national)
 
         # Actualizar historial, Elo, tabla y H2H después de calcular features.
         team_history.setdefault(home_id, []).insert(0, record["home"])
@@ -270,11 +304,20 @@ def build_samples() -> Tuple[np.ndarray, np.ndarray, List[int], Dict[str, Any]]:
             else:
                 h2h[pair][2] += 1
 
-    X = np.stack(features).astype(np.float32)
-    Y = np.asarray(targets, dtype=np.float32)
-    print(f"Muestras utilizables: {len(X)} · features: {X.shape[1]}", flush=True)
+    if features:
+        X = np.stack(features).astype(np.float32)
+        Y = np.asarray(targets, dtype=np.float32)
+    else:
+        X = np.empty((0, len(neural.FEATURE_NAMES)), dtype=np.float32)
+        Y = np.empty((0, len(neural.TARGET_NAMES)), dtype=np.float32)
+    print(
+        f"Muestras utilizables: {len(X)} · features: {X.shape[1]} · "
+        f"selecciones: {sum(national_flags)}",
+        flush=True,
+    )
     return X, Y, timestamps, {
         "elo_history": {str(key): value for key, value in elo_history.items()},
+        "national": national_flags,
     }
 
 
@@ -427,16 +470,30 @@ def mae(prediction: np.ndarray, target: np.ndarray) -> List[float]:
     return np.mean(np.abs(prediction - target), axis=0).round(4).tolist()
 
 
+def _subset_mae(
+    prediction: np.ndarray, target: np.ndarray, mask: np.ndarray
+) -> Optional[List[float]]:
+    if not bool(np.any(mask)):
+        return None
+    return mae(prediction[mask], target[mask])
+
+
 def main() -> int:
     started = time.perf_counter()
     X, Y, timestamps, metadata = build_samples()
     ts = np.asarray(timestamps, dtype=np.int64)
+    national = np.asarray(
+        metadata.get("national") or [False] * len(X), dtype=bool
+    )
     train_mask = ts < _parse_date("2026-07-01")
     val_mask = (ts >= _parse_date("2026-07-01")) & (ts < _parse_date("2026-10-01"))
     test_mask = ts >= _parse_date("2026-10-01")
     print(
         f"Split: train={int(train_mask.sum())} val={int(val_mask.sum())} "
-        f"test={int(test_mask.sum())}",
+        f"test={int(test_mask.sum())} · selecciones="
+        f"{int(national[train_mask].sum())}/"
+        f"{int(national[val_mask].sum())}/"
+        f"{int(national[test_mask].sum())}",
         flush=True,
     )
     if min(train_mask.sum(), val_mask.sum(), test_mask.sum()) == 0:
@@ -444,7 +501,8 @@ def main() -> int:
 
     mean = X[train_mask].mean(axis=0)
     std = X[train_mask].std(axis=0)
-    std[std < 1e-6] = 1.0
+    constant_features = std < 1e-6
+    std[constant_features] = 1.0
     Xn = (X - mean) / std
     x_train, y_train = Xn[train_mask], Y[train_mask]
     x_val, y_val = Xn[val_mask], Y[val_mask]
@@ -452,6 +510,9 @@ def main() -> int:
     train_ts = ts[train_mask].astype(np.float64)
     age_days = (train_ts.max() - train_ts) / 86400.0
     train_weights = (0.5 ** (age_days / 730.0)).astype(np.float32)
+    train_weights *= np.where(
+        national[train_mask], NATIONAL_SAMPLE_WEIGHT, 1.0
+    ).astype(np.float32)
     train_weights /= max(1e-9, float(train_weights.mean()))
     train_weights = train_weights[:, None]
 
@@ -515,6 +576,12 @@ def main() -> int:
         models.append((weights, biases))
         print(f"ensemble {seed + 1}/5 val={val_loss:.5f} epochs={epochs}", flush=True)
 
+    # Las features constantes en entrenamiento (por ejemplo, una competición
+    # sin partidos en el dataset) no deben alterar la inferencia si aparecen
+    # con valor 1. Se anulan sus pesos de entrada.
+    for weights, _ in models:
+        weights[0][constant_features, :] = 0.0
+
     val_rates = ensemble_rates(x_val, models)
     test_rates = ensemble_rates(x_test, models)
 
@@ -547,11 +614,28 @@ def main() -> int:
         "train": int(train_mask.sum()),
         "validation": int(val_mask.sum()),
         "test": int(test_mask.sum()),
+        "national_samples": int(national.sum()),
+        "national_train": int(national[train_mask].sum()),
+        "national_validation": int(national[val_mask].sum()),
+        "national_test": int(national[test_mask].sum()),
+        "constant_features": int(constant_features.sum()),
         "hidden": list(hidden),
         "learning_rate": learning_rate,
         "ensemble": 5,
         "test_mae_neural": mae(test_rates, y_test),
         "test_mae_baseline": mae(baseline_test, y_test),
+        "test_mae_neural_national": _subset_mae(
+            test_rates, y_test, national[test_mask]
+        ),
+        "test_mae_baseline_national": _subset_mae(
+            baseline_test, y_test, national[test_mask]
+        ),
+        "test_mae_neural_club": _subset_mae(
+            test_rates, y_test, ~national[test_mask]
+        ),
+        "test_mae_baseline_club": _subset_mae(
+            baseline_test, y_test, ~national[test_mask]
+        ),
         "blend_weights": {
             name: round(float(value), 3)
             for name, value in zip(neural.TARGET_NAMES, blend_weights)
@@ -559,6 +643,11 @@ def main() -> int:
     }
     print("MAE test neural:", metrics["test_mae_neural"], flush=True)
     print("MAE test baseline:", metrics["test_mae_baseline"], flush=True)
+    print(
+        "MAE test selecciones:",
+        metrics["test_mae_neural_national"],
+        flush=True,
+    )
 
     context_defaults = np.asarray(
         [mean[feature_index[f"home_{key}"]] for key in neural.SIDE_CONTEXT],
@@ -575,7 +664,7 @@ def main() -> int:
         "blend_weights": blend_weights,
         "ensemble": len(models),
         "n_layers": len(models[0][0]),
-        "version": "1.0",
+        "version": "1.1",
         "metrics_json": json.dumps(metrics, ensure_ascii=False),
     }
     for model_index, (weights, biases) in enumerate(models):

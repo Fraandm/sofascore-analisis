@@ -118,11 +118,21 @@ class WebHelperTests(unittest.TestCase):
         south = sample_match(3)
         south["tournament"] = {"id": 325, "name": "Brasileirao", "category_id": 13}
         south["region"] = "Sudamérica"
+        national = sample_match(4)
+        national["tournament"] = {
+            "id": 10783,
+            "name": "UEFA Nations League",
+            "category_id": 1465,
+        }
+        national["home_team"]["national"] = True
+        national["away_team"]["national"] = True
+        national["region"] = "Selecciones"
 
         self.assertEqual(webapp.top_league_index(top), 1)
         self.assertEqual(webapp.match_section(top), "top")
         self.assertEqual(webapp.match_section(other), "other")
         self.assertEqual(webapp.match_section(south), "south")
+        self.assertEqual(webapp.match_section(national), "national")
 
         merged = webapp._merge_matches([top, other], [sample_match(1, home=4)])
         self.assertEqual(len(merged), 2)
@@ -309,6 +319,12 @@ class WebHTTPTests(unittest.TestCase):
                     bootstrap = json.loads(response.read().decode("utf-8"))
                 self.assertIn("preferences", bootstrap)
                 self.assertIn("model", bootstrap)
+                self.assertTrue(
+                    any(
+                        region.get("key") == "selecciones"
+                        for region in bootstrap.get("regions", [])
+                    )
+                )
 
                 request = urllib.request.Request(
                     base + "/api/preferences",

@@ -3,8 +3,9 @@
 El modelo es una MLP multi-salida implementada con NumPy: no añade PyTorch
 al ejecutable. Predice las medias de goles, remates, remates al arco,
 córners, tarjetas y faltas a partir de la forma previa, Elo, clasificación,
-descanso y H2H. El entrenamiento se hace offline con
-``training/train_neural.py``.
+descanso y H2H. Incluye competiciones de clubes y selecciones; los amistosos
+internacionales no forman parte del entrenamiento. El entrenamiento se hace
+offline con ``training/train_neural.py``.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from . import normalize
+from . import normalize, regions
 
 MODEL_PATH = Path(__file__).with_name("models") / "neural_model.npz"
 
@@ -111,8 +112,12 @@ COMPETITION_IDS = (
     231,
     16940,
     480,
+    # Selecciones oficiales. Los amistosos (851/852) quedan fuera del
+    # entrenamiento y, por tanto, tampoco tienen columna propia.
+    *sorted(regions.NATIONAL_TOURNAMENT_IDS - regions.FRIENDLY_TOURNAMENT_IDS),
 )
 COMPETITION_FEATURES = tuple(f"competition_{value}" for value in COMPETITION_IDS)
+NATIONAL_FEATURE = "is_national_match"
 
 FEATURE_NAMES: Tuple[str, ...] = tuple(
     [f"home_last10_{key}" for key in SIDE_METRICS_10]
@@ -127,6 +132,7 @@ FEATURE_NAMES: Tuple[str, ...] = tuple(
     + list(DIFF_FEATURES)
     + list(LINEUP_FEATURES)
     + list(COMPETITION_FEATURES)
+    + [NATIONAL_FEATURE]
 )
 
 TARGET_NAMES: Tuple[str, ...] = (
@@ -303,6 +309,9 @@ def build_feature_vector(
     )
     competition = int(competition_id) if competition_id is not None else -1
     features.extend(1.0 if competition == value else 0.0 for value in COMPETITION_IDS)
+    features.append(
+        1.0 if competition in regions.NATIONAL_TOURNAMENT_IDS else 0.0
+    )
     return np.asarray(features, dtype=np.float32)
 
 

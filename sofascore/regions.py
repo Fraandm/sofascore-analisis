@@ -1,12 +1,14 @@
 """Regiones y competiciones admitidas por el analizador de forma.
 
-El programa se centra en competiciones profesionales de Europa y
-Sudamérica. Los IDs de categoría son los que usa SofaScore en
-``/sport/football/categories/all`` y se verificaron en noviembre de 2026.
+El programa admite competiciones profesionales de Europa, Sudamérica y las
+competiciones oficiales de selecciones absolutas. Los IDs de categoría son los
+que usa SofaScore en ``/sport/football/categories/all`` y se verificaron en
+noviembre de 2026.
 """
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any, Dict, Optional
 
 # Categorías de países europeos (senior). Se excluyen las categorías
@@ -81,39 +83,75 @@ SOUTH_AMERICA_CATEGORY_IDS = frozenset(
     }
 )
 
+# Competiciones oficiales de selecciones masculinas absolutas. También se
+# incluye el torneo de amistosos 851 para poder analizarlos en la interfaz,
+# pero el recolector y el entrenamiento los excluyen explícitamente.
+NATIONAL_TOURNAMENT_IDS = frozenset(
+    {
+        10783,  # UEFA Nations League
+        133,    # Copa América
+        16,     # Copa Mundial de la FIFA
+        11,     # Eliminatorias Mundial · UEFA
+        295,    # Eliminatorias Mundial · CONMEBOL
+        13,     # Eliminatorias Mundial · CAF
+        14,     # Eliminatorias Mundial · CONCACAF
+        308,    # Eliminatorias Mundial · AFC
+        309,    # Eliminatorias Mundial · OFC
+        1,      # Eurocopa
+        27,     # Clasificación Eurocopa
+        28,     # Clasificación Copa Asiática
+        1848,   # Clasificación Copa Africana
+        140,    # Copa Oro CONCACAF
+        270,    # Copa Africana de Naciones
+        246,    # Copa Asiática
+        14100,  # CONCACAF Nations League
+        22716,  # OFC Men's Nations Cup
+        18654,  # Finalissima
+        10618,  # Repesca intercontinental al Mundial
+        851,    # Amistosos internacionales (solo análisis)
+    }
+)
+
+# Amistosos internacionales: fuera del dataset y del entrenamiento.
+FRIENDLY_TOURNAMENT_IDS = frozenset({851, 852})
+
 REGION_EUROPE = "Europa"
 REGION_SOUTH_AMERICA = "Sudamérica"
+REGION_NATIONAL = "Selecciones"
 
 REGION_ALIASES = {
     "ambas": "ambas",
     "ambos": "ambas",
     "todas": "ambas",
+    "todo": "ambas",
     "europa": "europa",
     "europe": "europa",
     "sudamerica": "sudamerica",
-    "sudamérica": "sudamerica",
     "sud america": "sudamerica",
     "south america": "sudamerica",
+    "selecciones": "selecciones",
+    "seleccion": "selecciones",
+    "selecciones absolutas": "selecciones",
+    "nacional": "selecciones",
+    "nacionales": "selecciones",
+    "internacional": "selecciones",
+    "internacionales": "selecciones",
+    "national": "selecciones",
+    "national teams": "selecciones",
 }
 
 
+def _plain(value: Any) -> str:
+    text = str(value or "").strip().casefold()
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in normalized if not unicodedata.combining(char))
+
+
 def normalize_region(value: Optional[str]) -> str:
-    """Devuelve ``ambas``, ``europa`` o ``sudamerica``."""
+    """Devuelve ``ambas``, ``europa``, ``sudamerica`` o ``selecciones``."""
     if value is None:
         return "ambas"
-    key = str(value).strip().casefold()
-    if key in REGION_ALIASES:
-        return REGION_ALIASES[key]
-    # Acepta nombres con tilde/espacios sin depender de normalize para
-    # evitar un import circular.
-    plain = (
-        key.replace("á", "a")
-        .replace("é", "e")
-        .replace("í", "i")
-        .replace("ó", "o")
-        .replace("ú", "u")
-    )
-    return REGION_ALIASES.get(plain, "ambas")
+    return REGION_ALIASES.get(_plain(value), "ambas")
 
 
 def region_for_category(category_id: Any) -> Optional[str]:
@@ -129,10 +167,51 @@ def region_for_category(category_id: Any) -> Optional[str]:
     return None
 
 
+def region_for_tournament(
+    tournament_id: Any, category_id: Any = None
+) -> Optional[str]:
+    """Región de un torneo; las selecciones tienen prioridad sobre la categoría."""
+    try:
+        tournament_id = int(tournament_id)
+    except (TypeError, ValueError):
+        tournament_id = None
+    if tournament_id in NATIONAL_TOURNAMENT_IDS:
+        return REGION_NATIONAL
+    return region_for_category(category_id)
+
+
+def _team_is_national(team: Any) -> bool:
+    return isinstance(team, dict) and bool(team.get("national"))
+
+
+def is_national_match(match: Dict[str, Any]) -> bool:
+    """Indica si el partido enfrenta a selecciones (incluidos amistosos)."""
+    match = match or {}
+    tournament = match.get("tournament") or {}
+    try:
+        tournament_id = int(tournament.get("id"))
+    except (TypeError, ValueError):
+        tournament_id = None
+    if tournament_id in NATIONAL_TOURNAMENT_IDS:
+        return True
+    return _team_is_national(match.get("home_team")) or _team_is_national(
+        match.get("away_team")
+    )
+
+
 def region_for_match(match: Dict[str, Any]) -> Optional[str]:
     """Región de un partido normalizado."""
-    tournament = (match or {}).get("tournament") or {}
-    return region_for_category(tournament.get("category_id"))
+    match = match or {}
+    tournament = match.get("tournament") or {}
+    tournament_id = tournament.get("id")
+    category_id = tournament.get("category_id")
+    if tournament_id is not None:
+        region = region_for_tournament(tournament_id, category_id)
+        if region is not None:
+            return region
+    if is_national_match(match):
+        return REGION_NATIONAL
+    return region_for_category(category_id)
 
 
 def match_in_region(match: Dict[str, Any], region: str = "ambas") -> bool:

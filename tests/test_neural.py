@@ -40,6 +40,21 @@ class NeuralFeatureTests(unittest.TestCase):
         self.assertEqual(vector.shape, (len(neural.FEATURE_NAMES),))
         self.assertTrue(np.all(np.isfinite(vector)))
 
+    def test_national_feature_for_friendlies(self):
+        rows = copy.deepcopy(ANALYSIS["teams"]["home"]["matches"])
+        vector = neural.build_feature_vector(
+            rows,
+            rows,
+            {},
+            {},
+            {},
+            None,
+            None,
+            851,
+        )
+        index = neural.FEATURE_NAMES.index(neural.NATIONAL_FEATURE)
+        self.assertEqual(float(vector[index]), 1.0)
+
     @unittest.skipUnless(HAS_MODEL, "modelo neuronal no entrenado")
     def test_model_predicts_rates(self):
         analysis = copy.deepcopy(ANALYSIS)

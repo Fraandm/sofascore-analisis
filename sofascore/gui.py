@@ -47,9 +47,10 @@ from .extractor import SofaScoreExtractor, parse_day, resolve_timezone
 
 APP_TITLE = "SofaScore · Análisis de forma"
 REGION_LABELS = {
-    "Ambas": "ambas",
+    "Todas": "ambas",
     "Europa": "europa",
     "Sudamérica": "sudamerica",
+    "Selecciones": "selecciones",
 }
 COMPETITION_LABELS = {
     "Principales": "principales",
@@ -2278,7 +2279,7 @@ class SofaScoreApp:
         filters = ttk.Frame(day_tab)
         filters.pack(fill="x", pady=(0, 6))
         ttk.Label(filters, text="Región").pack(side="left")
-        self.region_var = tk.StringVar(value="Ambas")
+        self.region_var = tk.StringVar(value="Todas")
         ttk.Combobox(
             filters,
             textvariable=self.region_var,
@@ -3413,6 +3414,7 @@ class SofaScoreApp:
         return (
             tournament_id in TOP_LEAGUE_IDS
             or regions.normalize_region(entry.get("region")) == "sudamerica"
+            or regions.normalize_region(entry.get("region")) == "selecciones"
         )
 
     def _remaining_tournament(self, entry: Dict[str, Any]) -> bool:

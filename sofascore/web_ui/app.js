@@ -1081,6 +1081,8 @@ function filteredMatches() {
     matches = matches.filter((match) => match.section === "other");
   } else if (state.league === "south") {
     matches = matches.filter((match) => match.section === "south");
+  } else if (state.league === "national") {
+    matches = matches.filter((match) => match.section === "national");
   } else if (state.league.startsWith("league:")) {
     const id = state.league.slice(7);
     matches = matches.filter(
@@ -1116,7 +1118,7 @@ function filteredMatches() {
 }
 
 function groupedMatches(matches) {
-  const groups = { top: [], other: [], south: [] };
+  const groups = { top: [], other: [], south: [], national: [] };
   matches.forEach((match) => {
     const section = match.section || "other";
     (groups[section] || groups.other).push(match);
@@ -1130,7 +1132,7 @@ function groupedMatches(matches) {
       (a.start_timestamp || 0) - (b.start_timestamp || 0) ||
       leagueName(a).localeCompare(leagueName(b), "es"),
   );
-  ["other", "south"].forEach((key) => {
+  ["other", "south", "national"].forEach((key) => {
     groups[key].sort(
       (a, b) =>
         statusRank(a) - statusRank(b) ||
@@ -1138,7 +1140,7 @@ function groupedMatches(matches) {
         (a.start_timestamp || 0) - (b.start_timestamp || 0),
     );
   });
-  return ["top", "other", "south"]
+  return ["top", "national", "south", "other"]
     .filter((key) => groups[key].length)
     .map((key) => [key, groups[key]]);
 }
@@ -1163,8 +1165,9 @@ function renderLeagueOptions() {
   options.push(
     `<optgroup label="Destacadas">
       <option value="top5">Top 5 · Ligas principales</option>
-      <option value="other">Otras competiciones</option>
+      <option value="national">Selecciones</option>
       <option value="south">Sudamérica</option>
+      <option value="other">Otras competiciones</option>
     </optgroup>`,
   );
   const top = Array.from(leagues.values())
@@ -1194,7 +1197,7 @@ function renderLeagueOptions() {
     );
   }
   select.innerHTML = options.join("");
-  const available = new Set(["all", "top5", "other", "south"]);
+  const available = new Set(["all", "top5", "national", "other", "south"]);
   leagues.forEach((league) => available.add(`league:${league.id}`));
   select.value = available.has(state.league) ? state.league : "all";
   if (select.value !== state.league) state.league = "all";
@@ -1283,6 +1286,7 @@ function renderMatches() {
     top: "Top 5 · Ligas principales",
     other: "Otras competiciones",
     south: "Sudamérica",
+    national: "Selecciones",
   };
   list.innerHTML = grouped
     .map(([key, items]) => {
@@ -3039,12 +3043,14 @@ function renderModel() {
         <div class="model-stat"><span>Capas</span><strong>${esc(hidden.length ? hidden.join(" · ") : "—")}</strong></div>
         <div class="model-stat"><span>Validación</span><strong>${esc(fmtInt(metrics.validation || 0))}</strong></div>
         <div class="model-stat"><span>Test</span><strong>${esc(fmtInt(metrics.test || 0))}</strong></div>
+        <div class="model-stat"><span>Selecciones</span><strong>${esc(fmtInt(metrics.national_samples || 0))}</strong></div>
       </div>
     </div>
     <div class="card card-pad">
       <div class="section-title">${icon("chart")}Error por mercado</div>
       <div style="overflow-x:auto"><table class="mae-table"><thead><tr><th scope="col">Mercado</th><th scope="col" class="num">Red</th><th scope="col" class="num">Base</th><th scope="col" class="num">Resultado</th></tr></thead><tbody>${maeRows || '<tr><td colspan="4">Sin métricas.</td></tr>'}</tbody></table></div>
       <div class="inline-note" style="margin-top:8px">${icon("info")}MAE: error absoluto medio. Cuanto menor, mejor.</div>
+      ${Array.isArray(metrics.test_mae_neural_national) ? `<div class="inline-note" style="margin-top:4px">${icon("users")}Selecciones: MAE de goles ${esc(fmt(metrics.test_mae_neural_national[0], 2))} / ${esc(fmt(metrics.test_mae_neural_national[1], 2))} en ${esc(fmtInt(metrics.national_test || 0))} partidos de test.</div>` : ""}
     </div>
   </div>
   <div class="grid-2" style="margin-top:14px;align-items:start">
@@ -3108,7 +3114,7 @@ function openSettings() {
         <select class="settings-select" id="settingTimezone" aria-label="Zona horaria">${(state.boot?.timezones || []).map((timezone) => `<option value="${esc(timezone)}" ${timezone === state.timezone ? "selected" : ""}>${esc(timezone)}</option>`).join("")}</select>
       </div>
       <div class="setting-row">
-        <div class="setting-copy"><strong>Región</strong><span>Europa, Sudamérica o ambas.</span></div>
+        <div class="setting-copy"><strong>Región</strong><span>Europa, Sudamérica, selecciones o todas.</span></div>
         <select class="settings-select" id="settingRegion" aria-label="Región">${(state.boot?.regions || []).map((region) => `<option value="${esc(region.key)}" ${region.key === state.region ? "selected" : ""}>${esc(region.label)}</option>`).join("")}</select>
       </div>
       <div class="setting-row">
@@ -3279,7 +3285,7 @@ async function openTeamMatches(teamId, teamNameValue, modal) {
           <span class="team-match-main">${esc(teamName(match.home_team))} vs ${esc(teamName(match.away_team))}<span class="team-match-comp">${esc(match.tournament?.name || "")}</span></span>
           <span class="score-pill ${isLive(match) ? "live" : isFinished(match) ? "finished" : ""}">${esc(isFinished(match) || isLive(match) ? scoreShort(match) : status.short)}</span>
         </div>`;
-      }).join("") : `<div class="empty-state compact"><p>No hay partidos en Europa o Sudamérica con los filtros actuales.</p></div>`}</div>`;
+      }).join("") : `<div class="empty-state compact"><p>No hay partidos con los filtros actuales.</p></div>`}</div>`;
     $("#teamBack", body)?.addEventListener("click", openTeamSearch);
   } catch (error) {
     body.innerHTML = `<div class="warning-box">${icon("alert")}<div>${esc(error.message)}</div></div>`;

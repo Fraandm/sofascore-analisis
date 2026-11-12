@@ -55,7 +55,9 @@ def _scheduled_entries(
                     "category_id": category.get("id"),
                     "country": (category.get("country") or {}).get("name")
                     or category.get("name"),
-                    "region": regions.region_for_category(category.get("id")),
+                    "region": regions.region_for_tournament(
+                        unique_id, category.get("id")
+                    ),
                     "priority": tournament.get("priority") or 0,
                 }
             )
@@ -131,9 +133,9 @@ def list_upcoming(
     include_live: bool = True,
     tournament_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
 ) -> List[Dict[str, Any]]:
-    """Partidos de un día en Europa y/o Sudamérica.
+    """Partidos de un día en Europa, Sudamérica y selecciones.
 
-    ``region``: ``ambas``, ``europa`` o ``sudamerica``.
+    ``region``: ``ambas``, ``europa``, ``sudamerica`` o ``selecciones``.
     ``competitions``: ``principales`` (prioridad alta) o ``todas``.
     ``include_finished``: añade partidos terminados con su marcador final.
     ``include_live``: añade partidos en vivo con su marcador y minuto.
@@ -274,10 +276,11 @@ def list_team_upcoming(
     include_finished: bool = False,
     include_live: bool = True,
 ) -> List[Dict[str, Any]]:
-    """Partidos de un equipo en Europa/Sudamérica.
+    """Partidos de un equipo en Europa/Sudamérica o de una selección.
 
     Incluye próximos partidos, partidos en vivo y, con ``include_finished``,
-    también los últimos resultados.
+    también los últimos resultados. Para selecciones se aceptan amistosos y
+    competiciones nacionales, aunque los amistosos no se usan para entrenar.
     """
     region = regions.normalize_region(region)
     tz = resolve_timezone(timezone_name)

@@ -165,6 +165,52 @@ class RegionTests(unittest.TestCase):
             regions.match_in_region({"tournament": {"category_id": 1468}}, "ambas")
         )
 
+    def test_national_tournament_region(self):
+        self.assertEqual(regions.region_for_tournament(10783, 1465), "Selecciones")
+        self.assertEqual(regions.region_for_tournament(851, 1468), "Selecciones")
+        self.assertEqual(regions.normalize_region("selecciones"), "selecciones")
+        self.assertEqual(regions.normalize_region("Selecciones absolutas"), "selecciones")
+        match = {
+            "tournament": {"id": 10783, "category_id": 1465},
+            "home_team": {"id": 4700, "national": True},
+            "away_team": {"id": 4717, "national": True},
+        }
+        self.assertTrue(regions.is_national_match(match))
+        self.assertEqual(regions.region_for_match(match), "Selecciones")
+        self.assertTrue(regions.match_in_region(match, "selecciones"))
+        self.assertTrue(regions.match_in_region(match, "ambas"))
+        self.assertFalse(regions.match_in_region(match, "europa"))
+
+    def test_national_history_uses_previous_seasons(self):
+        older = make_event(201, 4700, "Türkiye", 4717, "Belgium", 1, 0, 1730000000)
+        recent = make_event(202, 4700, "Türkiye", 4717, "Belgium", 2, 2, 1740000000)
+        for event, season_year in ((older, "2024"), (recent, "2025")):
+            event["season"] = {"id": 1, "name": f"Test {season_year}", "year": season_year}
+            event["tournament"] = {
+                "id": 10783,
+                "name": "UEFA Nations League",
+                "uniqueTournament": {
+                    "id": 10783,
+                    "name": "UEFA Nations League",
+                    "category": {"id": 1465, "name": "Europe"},
+                },
+                "category": {"id": 1465, "name": "Europe"},
+            }
+            event["homeTeam"]["national"] = True
+            event["awayTeam"]["national"] = True
+        extractor = FakeExtractor(
+            {endpoints.team_events(4700, "last", 0): {"events": [older, recent]}}
+        )
+        rows = form.matches_for_team(
+            extractor,
+            4700,
+            {"year": "26/27"},
+            before_timestamp=1800000000,
+            limit=10,
+            national=True,
+        )
+        self.assertEqual([row["id"] for row in rows], [202, 201])
+
 
 class MatchStatsTests(unittest.TestCase):
     def test_home_row(self):

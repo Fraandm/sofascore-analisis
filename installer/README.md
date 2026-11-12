@@ -46,6 +46,6 @@ instalador en Windows cuando se publica un tag `v*`, y adjunta el instalador y
 las sumas SHA-256 a la release de GitHub.
 
 ```bash
-git tag v1.15.2
-git push origin v1.15.2
+git tag v1.16.0
+git push origin v1.16.0
 ```

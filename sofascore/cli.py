@@ -273,9 +273,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--region",
-        choices=["ambas", "europa", "sudamerica"],
+        choices=["ambas", "europa", "sudamerica", "selecciones"],
         default="ambas",
-        help="Región de las competiciones (por defecto ambas).",
+        help="Región de las competiciones (por defecto todas).",
     )
     p.add_argument(
         "--competitions",

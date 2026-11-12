@@ -48,9 +48,9 @@ El resultado queda en `dist-installer\SofaScore-Setup-<versión>.exe`, junto con
 ## Características
 
 - Partidos de una fecha con filtro por país, torneo o estado en vivo.
-- **Listado agrupado por liga**: primero las cinco grandes, después el resto de Europa y Sudamérica, con encabezados y separadores visuales.
+- **Listado agrupado por liga**: primero las cinco grandes, después las selecciones, Sudamérica y el resto de competiciones, con encabezados y separadores visuales.
 - **Partidos próximos, en vivo y finalizados** en el mismo listado, con marcador actual o final y minuto de juego.
-- **Carga progresiva**: primero aparecen las cinco grandes y Sudamérica; el resto de competiciones se incorpora en segundo plano.
+- **Carga progresiva**: primero aparecen las cinco grandes, las selecciones y Sudamérica; el resto de competiciones se incorpora en segundo plano.
 - **Actualización automática en vivo** cada 45 segundos, sin recargar toda la fecha.
 - **Favoritos y alertas**: marca equipos, filtra por ellos y recibe avisos de inicio, gol y final.
 - **Escudos, banderas y chips de estado**: imágenes de equipos y países con caché local, además de filtros rápidos por estado.
@@ -67,7 +67,7 @@ El resultado queda en `dist-installer\SofaScore-Setup-<versión>.exe`, junto con
 - **Análisis de forma previo a un partido**: goles, xG, ocasiones claras, remates dentro del área, córners, tarjetas, remates, remates al arco, faltas y paradas del portero de ambos equipos.
 - **Modelo ajustado al rival**: remates, córners, tarjetas y faltas combinan la producción propia con lo que concede el adversario; los goles mezclan goles y xG.
 - **Contexto de fuerza**: valor de mercado de la alineación, clasificación de la competición y H2H para corregir favoritos artificiales.
-- **Red neuronal de apoyo**: MLP entrenada con partidos históricos para ajustar los goles y las tarjetas; se combina con Monte Carlo cuando mejora la validación.
+- **Red neuronal de apoyo**: MLP entrenada con partidos históricos de clubes y selecciones para ajustar los goles y las tarjetas; se combina con Monte Carlo cuando mejora la validación.
 - **Alineaciones y árbitro**: etiqueta si la alineación es probable o confirmada, usa los titulares confirmados en la simulación y ajusta tarjetas/faltas con el historial del árbitro.
 - **Simulación Monte Carlo con NumPy**: miles de escenarios para estimar distribuciones, percentiles, probabilidades 1X2, ambos marcan, over/under y matriz de marcadores.
 - **Interfaz web local HTML5/CSS/JS** para elegir el partido, la ventana de partidos y exportar el análisis, con **siete temas visuales**, búsqueda instantánea, filtros, atajos de teclado, gráficos propios y diseño adaptable. Incluye **modo clásico de Tkinter** como respaldo.
@@ -179,7 +179,7 @@ También puedes usar `SofaScore.exe` con doble clic, `Iniciar SofaScore.cmd` o, 
 
 ### Pantallas
 
-- **Partidos**: listado agrupado en **Top 5**, **Otras competiciones** y **Sudamérica**, con búsqueda instantánea, chips de estado, favoritos y carga progresiva.
+- **Partidos**: listado agrupado en **Top 5**, **Selecciones**, **Sudamérica** y **Otras competiciones**, con búsqueda instantánea, chips de estado, favoritos y carga progresiva.
 - **Sala de directo**: tarjetas de todos los partidos en vivo, con marcador, minuto, escudos, liga y el último pronóstico guardado. Se actualiza sola.
 - **Cuaderno de predicciones**: historial automático con acierto 1X2, Brier, log-loss, error medio de goles, búsqueda, filtros y exportación CSV.
 - **Estudio de previas**: previa completa con forma, comparación, probabilidades, alineaciones y árbitro. Permite copiar Markdown, descargar Markdown/HTML y abrir el HTML en el navegador para imprimirlo como PDF.
@@ -190,9 +190,9 @@ También puedes usar `SofaScore.exe` con doble clic, `Iniciar SofaScore.cmd` o, 
 
 ### Filtros, carga progresiva y directo
 
-El listado por fecha se organiza en tres bloques: **Top 5** (Premier League, LaLiga, Serie A, Bundesliga y Ligue 1), **Otras competiciones** y **Sudamérica**. Dentro de cada bloque, los partidos en vivo aparecen primero, después los próximos y al final los finalizados.
+El listado por fecha se organiza en cuatro bloques: **Top 5** (Premier League, LaLiga, Serie A, Bundesliga y Ligue 1), **Selecciones**, **Sudamérica** y **Otras competiciones**. Dentro de cada bloque, los partidos en vivo aparecen primero, después los próximos y al final los finalizados.
 
-La primera petición carga las competiciones principales y Sudamérica; el resto se incorpora en segundo plano con un aviso de progreso. El botón **Todas** permite ampliar el alcance.
+La primera petición carga las competiciones principales, las selecciones y Sudamérica; el resto se incorpora en segundo plano con un aviso de progreso. El botón **Todas** permite ampliar el alcance.
 
 La **Sala de directo** y el listado se actualizan automáticamente cada 45 segundos. Solo se consulta el endpoint de eventos en vivo y, si un partido acaba de terminar, se pide su detalle para mostrar el resultado final. Se puede desactivar en **Ajustes → Auto en vivo**.
 
@@ -409,6 +409,7 @@ python -m sofascore categories --filter "south america"
 python -m sofascore upcoming
 python -m sofascore upcoming 2026-11-04 --include-finished
 python -m sofascore upcoming 2026-11-07 --region europa
+python -m sofascore upcoming 2026-11-12 --region selecciones
 python -m sofascore upcoming 2026-11-07 --limit 40 -f csv -o partidos.csv
 ```
 
@@ -417,7 +418,7 @@ Incluye partidos próximos y en vivo, y con `--include-finished` también termin
 | Opción | Descripción |
 |---|---|
 | `date` | `YYYY-MM-DD`, `DD/MM/YYYY`, `hoy`, `ayer` o `mañana` (por defecto `hoy`). |
-| `--region` | `ambas`, `europa` o `sudamerica`. |
+| `--region` | `ambas`, `europa`, `sudamerica` o `selecciones`. |
 | `--competitions` | `principales` (rápido) o `todas`. |
 | `--include-finished` | Añade partidos finalizados con su marcador. |
 | `--no-live` | Excluye los partidos en vivo (por defecto se incluyen). |
@@ -534,15 +535,28 @@ SofaScore omite las claves cuyo valor es cero; el programa las interpreta como 0
 
 ### ¿Hace falta Opta u otra plataforma?
 
-No para estas siete métricas: SofaScore ya publica todas ellas para las competiciones profesionales de Europa y Sudamérica. Opta es un proveedor de datos con licencia de pago y no se integra en este proyecto. Si en el futuro se añade otro proveedor, la lógica de descarga está aislada en `sofascore/form.py` y `sofascore/client.py`.
+No para estas siete métricas: SofaScore ya publica todas ellas para las competiciones profesionales de Europa, Sudamérica y las competiciones oficiales de selecciones. Opta es un proveedor de datos con licencia de pago y no se integra en este proyecto. Si en el futuro se añade otro proveedor, la lógica de descarga está aislada en `sofascore/form.py` y `sofascore/client.py`.
 
 ### Temporada y competiciones incluidas
 
 - Se usa la temporada del partido seleccionado. Por ejemplo, `26/27` cubre todos los partidos de esa temporada, aunque el equipo juegue LaLiga y Champions League.
 - En ligas de año natural (Brasil, Argentina, etc.) se usa la temporada `2026`.
-- Solo se incluyen competiciones cuya categoría pertenece a Europa o Sudamérica.
-- Se excluyen amistosos, torneos mundiales y competiciones de selecciones.
-- Para «toda la temporada» se limita la muestra a 80 partidos por equipo para evitar cientos de peticiones.
+- Se incluyen competiciones profesionales de Europa y Sudamérica.
+- Se incluyen competiciones oficiales de selecciones absolutas: Nations League, Copa América, Mundial, Eurocopa, Copa Oro, Copa Africana, Copa Asiática, Finalissima y eliminatorias.
+- Los amistosos internacionales se pueden analizar, pero quedan fuera del dataset y del entrenamiento de la red neuronal.
+- Para «toda la temporada» se limita la muestra a 80 partidos por equipo para evitar cientos de peticiones. En selecciones se usan los últimos partidos disponibles, aunque pertenezcan a temporadas distintas.
+
+### Selecciones
+
+La app reconoce una región **Selecciones** con las competiciones oficiales masculinas absolutas:
+
+- UEFA Nations League y CONCACAF Nations League.
+- Copa América, Eurocopa, Copa Oro, Copa Africana de Naciones, Copa Asiática, OFC Nations Cup y Finalissima.
+- Copa Mundial de la FIFA.
+- Eliminatorias mundialistas de UEFA, CONMEBOL, CAF, CONCACAF, AFC y OFC, además de la repesca intercontinental.
+- Clasificaciones continentales de Eurocopa, Copa Asiática y Copa Africana.
+
+El análisis de forma de una selección recoge sus últimos partidos aunque pertenezcan a competiciones o años distintos. Los amistosos internacionales se pueden analizar en la interfaz, pero **no entran en `dataset_national.jsonl` ni en el entrenamiento**; el entrenador los descarta expresamente por ID y por nombre.
 
 ---
 
@@ -584,14 +598,16 @@ En los partidos **ya finalizados** no se usan clasificación ni H2H para el mode
 
 La app incorpora una **MLP multi-salida implementada con NumPy**, sin PyTorch, para que el ejecutable siga siendo ligero. Predice las medias de goles, remates, remates al arco, córners, tarjetas y faltas.
 
-- **Entrenamiento offline** con **11.663 partidos**:
+- **Entrenamiento offline** con **15.963 partidos**:
   - Premier League, LaLiga, Serie A, Bundesliga, Ligue 1 y Champions League.
   - Temporadas 2023/24, 2024/25, 2025/26 y 2026/27.
   - Ligas profesionales de Sudamérica: Brasil, Argentina, Colombia, Ecuador, Perú, Chile, Uruguay, Paraguay, Bolivia y Venezuela, con temporadas 2024 y 2025.
   - Copa Libertadores y Copa Sudamericana 2024/2025.
-- **10.919 muestras utilizables** tras exigir historial previo.
-- **Alineaciones históricas** de los 11.663 partidos: valor de mercado, valoración media, ausencias y confianza de la alineación.
-- Features: forma de los últimos 5/10 partidos, splits local/visitante, xG, xG al arco, ocasiones claras, remates dentro del área, estadísticas concedidas, Elo, clasificación, descanso, H2H, calidad de alineación y competición.
+  - **4.300 partidos oficiales de selecciones**: Nations League, Copa América, Mundial, Eurocopa, clasificaciones continentales y eliminatorias mundialistas. Los amistosos quedan fuera.
+- **14.907 muestras utilizables** tras exigir historial previo, de ellas **3.988 de selecciones**.
+- **Alineaciones históricas** de los 11.663 partidos de clubes: valor de mercado, valoración media, ausencias y confianza de la alineación.
+- Si una competición no tiene estadísticas históricas completas, la app la sigue mostrando y analizando con las features disponibles; solo queda fuera del entrenamiento.
+- Features: forma de los últimos 5/10 partidos, splits local/visitante, xG, xG al arco, ocasiones claras, remates dentro del área, estadísticas concedidas, Elo, clasificación, descanso, H2H, calidad de alineación, competición y un indicador específico de partido de selecciones.
 - Validación temporal estricta: temporadas anteriores para entrenar, inicio de 2026/27 para validar y los partidos más recientes para probar.
 - Ensemble de 5 redes y mezcla conservadora con el modelo existente.
 - La mezcla se aplica en goles, remates, remates al arco, córners, tarjetas y faltas; en las salidas donde la validación no mejora, el peso se reduce o se anula.
@@ -600,29 +616,32 @@ Métricas de la última prueba:
 
 | Salida | MAE red | MAE baseline |
 |---|---:|---:|
-| Goles local | **1,03** | 1,12 |
-| Goles visitante | **0,94** | 1,03 |
-| Remates local | **4,04** | 4,44 |
-| Remates visitante | **3,78** | 4,33 |
-| Remates al arco local | **1,84** | 2,03 |
-| Remates al arco visitante | **1,86** | 2,00 |
-| Córners local | **2,25** | 2,27 |
-| Córners visitante | **1,88** | 2,10 |
-| Tarjetas local | **1,13** | 1,20 |
-| Tarjetas visitante | **1,15** | 1,21 |
-| Faltas local | **2,98** | 3,08 |
-| Faltas visitante | **3,07** | 3,07 |
+| Goles local | **1,03** | 1,09 |
+| Goles visitante | **0,95** | 1,05 |
+| Remates local | **3,98** | 4,62 |
+| Remates visitante | **3,73** | 4,30 |
+| Remates al arco local | **1,83** | 2,04 |
+| Remates al arco visitante | **1,82** | 1,99 |
+| Córners local | **2,20** | 2,33 |
+| Córners visitante | **1,87** | 2,11 |
+| Tarjetas local | **1,12** | 1,16 |
+| Tarjetas visitante | **1,18** | 1,26 |
+| Faltas local | **2,96** | 3,04 |
+| Faltas visitante | 3,11 | 3,05 |
+
+En los **54 partidos de selecciones** del conjunto de prueba, el MAE de goles fue **0,90 / 0,90**, frente a **0,94 / 1,17** del baseline. El modelo también mejora claramente remates, remates al arco y córners en selecciones.
 
 Los pesos están en `sofascore/models/neural_model.npz` y el modelo se incluye en el ejecutable. Para reentrenar:
 
 ```bash
 python training/collect_dataset.py
 python training/collect_extra.py
+python training/collect_national.py
 python training/collect_lineups.py
 python training/train_neural.py
 ```
 
-El dataset bruto queda en `training/data/dataset.jsonl`, `training/data/dataset_extra.jsonl` y `training/data/lineups.jsonl`; las métricas, en `training/metrics.json`.
+El dataset bruto queda en `training/data/dataset.jsonl`, `training/data/dataset_extra.jsonl`, `training/data/dataset_national.jsonl` y `training/data/lineups.jsonl`; las métricas, en `training/metrics.json`.
 
 ### Modelo
 
@@ -645,7 +664,7 @@ El dataset bruto queda en `training/data/dataset.jsonl`, `training/data/dataset_
 - **Over/Under**: probabilidad de superar una línea (por ejemplo, más de 9,5 córners).
 - **1X2, ambos marcan y porterías a cero**: probabilidades agregadas de todos los escenarios.
 - **Paradas por arquero**: en Mercados, las paradas se muestran por separado para el portero local y el visitante, cada uno con sus propias líneas over/under.
-- **Matriz de marcadores**: porcentaje de veces que aparece cada resultado, con el eje vertical invertido (0 abajo, 6+ arriba) y dos decimales de precisión.
+- **Matriz de marcadores**: porcentaje de veces que aparece cada resultado, con el eje vertical invertido (0 abajo, 6+ arriba) y al menos un decimal de precisión.
 
 Los histogramas usan un rango dinámico basado en el percentil 99,5 de cada métrica. La última barra (por ejemplo, `33+` en córners) agrupa la cola restante y se muestra con su porcentaje, para que no parezca un pico artificial. La media se calcula siempre con todas las simulaciones, no a partir de las barras.
 
@@ -918,7 +937,7 @@ Si recibes un `403` persistente:
 │   ├── preview_window.py  # estudio de previas (modo clásico)
 │   ├── explorer_window.py # explorador y API (modo clásico)
 │   ├── normalize.py       # normalización de respuestas
-│   ├── regions.py         # competiciones de Europa y Sudamérica
+│   ├── regions.py         # competiciones de clubes y selecciones
 │   └── upcoming.py        # partidos por fecha (próximos y finalizados)
 ├── tests/
 │   ├── test_core.py
@@ -927,10 +946,12 @@ Si recibes un `403` persistente:
 │   ├── test_neural.py
 │   ├── test_simulation_cache.py
 │   ├── test_apps.py       # historial, previas y API
+│   ├── test_training.py   # datasets y exclusión de amistosos
 │   └── test_webapp.py     # interfaz web y endpoints
 ├── training/
 │   ├── collect_dataset.py # dataset europeo base
 │   ├── collect_extra.py   # más temporadas + Sudamérica y copas
+│   ├── collect_national.py # selecciones oficiales (sin amistosos)
 │   ├── collect_lineups.py # alineaciones y valores de plantilla
 │   ├── train_neural.py    # entrena y exporta los pesos
 │   ├── metrics.json       # métricas de la última prueba
@@ -955,7 +976,7 @@ Las pruebas no hacen peticiones de red:
 python -m unittest discover -s tests -v
 ```
 
-Son 64 pruebas: normalización, fechas, zonas horarias, exportación, regiones, estadísticas de forma, análisis completo con un cliente falso, perfil del árbitro, xG y tasas concedidas, contexto de fuerza, red neuronal, validación de partidos finalizados y en vivo, caché de simulaciones y el motor Monte Carlo (reproducibilidad, coherencia, alineaciones, árbitro, percentiles, mercados y serialización).
+Son 99 pruebas: normalización, fechas, zonas horarias, exportación, regiones, estadísticas de forma, análisis completo con un cliente falso, perfil del árbitro, xG y tasas concedidas, contexto de fuerza, red neuronal, exclusión de amistosos del entrenamiento, validación de partidos finalizados y en vivo, caché de simulaciones y el motor Monte Carlo (reproducibilidad, coherencia, alineaciones, árbitro, percentiles, mercados y serialización).
 
 ---
 
@@ -967,7 +988,7 @@ Son 64 pruebas: normalización, fechas, zonas horarias, exportación, regiones, 
 - El análisis de forma necesita una petición de estadísticas por partido. La primera consulta de una ventana puede tardar; después se usa caché durante 7 días.
 - La lista de partidos se limita a las competiciones con mayor prioridad para que la interfaz responda rápido. Usa «Todas» o el comando `upcoming --competitions todas` para ampliarla.
 - El listado incluye partidos próximos, en vivo y finalizados. Los partidos en vivo muestran el minuto y el marcador actual; pulsa «Analizar partido» de nuevo para refrescar sus estadísticas.
-- Solo se admiten competiciones profesionales de Europa y Sudamérica; los amistosos y torneos mundiales quedan fuera.
+- Se admiten competiciones profesionales de Europa, Sudamérica y competiciones oficiales de selecciones. Los amistosos se pueden analizar, pero no se usan para entrenar.
 - El H2H, el gráfico y los mejores jugadores se devuelven como JSON crudo de la API porque su estructura varía según el partido.
 - El xG, las ocasiones claras y los remates dentro del área no están disponibles en todas las competiciones. Si faltan, el modelo usa goles y el resto de estadísticas disponibles; las tasas concedidas por el rival también caen de vuelta a la producción propia.
 - La simulación Monte Carlo es un modelo probabilístico a partir de medias históricas: usa alineaciones y árbitro cuando están disponibles, pero no conoce lesiones de última hora, xG futuro ni el contexto del partido. Interpreta sus resultados como escenarios, no como certezas.

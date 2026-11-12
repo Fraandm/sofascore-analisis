@@ -137,6 +137,8 @@ def match_section(match: Dict[str, Any]) -> str:
     region = (match or {}).get("region") or regions.region_for_match(match or {})
     if region == regions.REGION_SOUTH_AMERICA:
         return "south"
+    if region == regions.REGION_NATIONAL:
+        return "national"
     return "other"
 
 
@@ -452,9 +454,10 @@ class WebService:
             "preferences": prefs,
             "timezones": list(TIMEZONES),
             "regions": [
-                {"key": "ambas", "label": "Europa + Sudamérica"},
+                {"key": "ambas", "label": "Todas"},
                 {"key": "europa", "label": "Europa"},
                 {"key": "sudamerica", "label": "Sudamérica"},
+                {"key": "selecciones", "label": "Selecciones"},
             ],
             "competitions": [
                 {"key": "principales", "label": "Competiciones principales"},
@@ -518,6 +521,7 @@ class WebService:
         return (
             tournament_id in TOP_LEAGUE_IDS
             or regions.normalize_region(entry.get("region")) == "sudamerica"
+            or regions.normalize_region(entry.get("region")) == "selecciones"
         )
 
     def _remaining_tournament(self, entry: Dict[str, Any]) -> bool:
