@@ -125,6 +125,21 @@ def build_preview(
         lines.append("")
 
     if summary:
+        live = summary.get("live") or {}
+        if live:
+            lines.append("## Estado en vivo")
+            lines.append("")
+            lines.append(
+                f"- **Marcador actual:** {live.get('current_score')} "
+                f"(minuto {_fmt(live.get('minute'))})"
+            )
+            lines.append(
+                f"- **Marcador esperado ahora:** {live.get('expected_now_score')}"
+            )
+            lines.append(
+                f"- **Proyección final:** {live.get('expected_final_score')}"
+            )
+            lines.append("")
         lines.append("## Probabilidades simuladas")
         lines.append("")
         lines.append(

@@ -749,8 +749,6 @@ class WebService:
             )
         if cached_summary is not None:
             summary = dict(cached_summary)
-            if analysis.get("actual") is not None:
-                summary["actual"] = analysis["actual"]
             if progress:
                 progress(3, 3, "Simulación recuperada de la caché.")
         else:
@@ -764,6 +762,18 @@ class WebService:
             simulation_cache.save_simulation(
                 summary, analysis, iterations, seed
             )
+        current_actual = analysis.get("actual")
+        if current_actual is not None:
+            summary["actual"] = current_actual
+        live = (
+            simulation.live_projection(summary, current_actual)
+            if current_actual is not None
+            else None
+        )
+        if live is None:
+            summary.pop("live", None)
+        else:
+            summary["live"] = live
         stored = dict(summary)
         meta = dict(stored.get("meta") or {})
         meta["model_version"] = __version__

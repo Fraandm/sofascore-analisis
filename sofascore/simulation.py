@@ -1285,6 +1285,75 @@ def _top_scorelines(
     return rows
 
 
+def _score_pair(score: Any) -> Optional[Tuple[int, int]]:
+    """Convierte ``"2-1"`` en ``(2, 1)``; devuelve ``None`` si no es válido."""
+    if not isinstance(score, str) or "-" not in score:
+        return None
+    left, right = score.split("-", 1)
+    try:
+        return int(left.strip()), int(right.strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def live_projection(
+    summary: Dict[str, Any], actual: Optional[Dict[str, Any]] = None
+) -> Optional[Dict[str, Any]]:
+    """Marcador esperado por el modelo en el minuto actual de un partido en vivo.
+
+    ``expected_now_score`` es la proyección del modelo prepartido hasta el
+    minuto jugado. ``expected_final_score`` parte del marcador real y añade los
+    goles que el modelo espera en el tiempo restante.
+    """
+    actual = actual or (summary or {}).get("actual") or {}
+    if actual.get("status") != "live":
+        return None
+    current = _score_pair(actual.get("score"))
+    if current is None:
+        return None
+    teams = (summary or {}).get("teams") or {}
+    home_expected = ((teams.get("home") or {}).get("expected") or {})
+    away_expected = ((teams.get("away") or {}).get("expected") or {})
+    home_full = home_expected.get("goals_for")
+    away_full = away_expected.get("goals_for")
+    if home_full is None or away_full is None:
+        return None
+    try:
+        home_full = float(home_full)
+        away_full = float(away_full)
+        minute = float(actual.get("minute") or 0.0)
+    except (TypeError, ValueError):
+        return None
+    minute = _clip(minute, 0.0, 90.0)
+    elapsed = minute / 90.0
+    remaining = 1.0 - elapsed
+    home_now = home_full * elapsed
+    away_now = away_full * elapsed
+    home_left = home_full * remaining
+    away_left = away_full * remaining
+    now_home = int(round(home_now))
+    now_away = int(round(away_now))
+    final_home = int(round(current[0] + home_left))
+    final_away = int(round(current[1] + away_left))
+    return {
+        "minute": round(minute, 1),
+        "current_score": f"{current[0]}-{current[1]}",
+        "current": {"home": current[0], "away": current[1]},
+        "expected_now_score": f"{now_home}-{now_away}",
+        "expected_now": {"home": now_home, "away": now_away},
+        "expected_now_goals": {
+            "home": round(home_now, 2),
+            "away": round(away_now, 2),
+        },
+        "expected_final_score": f"{final_home}-{final_away}",
+        "expected_final": {"home": final_home, "away": final_away},
+        "remaining_goals": {
+            "home": round(home_left, 2),
+            "away": round(away_left, 2),
+        },
+    }
+
+
 def _summarize(result: SimulationResult) -> Dict[str, Any]:
     samples = result.samples
     match = (result.analysis or {}).get("match") or {}
@@ -1483,6 +1552,9 @@ def _summarize(result: SimulationResult) -> Dict[str, Any]:
     actual = (result.analysis or {}).get("actual")
     if actual is not None:
         summary["actual"] = actual
+        live = live_projection(summary, actual)
+        if live is not None:
+            summary["live"] = live
     return summary
 
 
@@ -1525,6 +1597,36 @@ def summary_rows(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "local": None,
                 "visitante": None,
                 "total": value,
+                "probabilidad": None,
+            }
+        )
+
+    live = summary.get("live") or {}
+    if live:
+        for label, key in (
+            ("Marcador actual", "current"),
+            ("Marcador esperado ahora", "expected_now"),
+            ("Goles restantes esperados", "remaining_goals"),
+        ):
+            values = live.get(key) or {}
+            rows.append(
+                {
+                    "seccion": "En vivo",
+                    "metrica": label,
+                    "local": values.get("home"),
+                    "visitante": values.get("away"),
+                    "total": None,
+                    "probabilidad": None,
+                }
+            )
+        final = live.get("expected_final") or {}
+        rows.append(
+            {
+                "seccion": "En vivo",
+                "metrica": "Proyección final",
+                "local": final.get("home"),
+                "visitante": final.get("away"),
+                "total": None,
                 "probabilidad": None,
             }
         )

@@ -1983,8 +1983,11 @@ function renderSimulationResults(summary) {
   const topLabel = topSide === "home" ? homeName : topSide === "away" ? awayName : "Empate";
   const topProbability = Number(winner[topSide] || 0);
   const cornersPercentiles = percentiles.corners || {};
+  const live = summary.live || null;
   const kpis = `
     <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(155px,1fr))">
+      ${live ? kpiCard("Marcador esperado", live.expected_now_score, `min ${fmt(live.minute, 0)} · actual ${live.current_score}`, "var(--accent-2)") : ""}
+      ${live ? kpiCard("Proyección final", live.expected_final_score, `faltan ${fmt(live.remaining_goals?.home)} · ${fmt(live.remaining_goals?.away)} goles`, "var(--good)") : ""}
       ${kpiCard("Goles", fmt(mean.goals), `L ${fmt(homeExpected.goals_for)} · V ${fmt(awayExpected.goals_for)}`, "var(--accent)")}
       ${kpiCard("Resultado", pct(topProbability), `gana ${shortName(topLabel, 12)}`, "var(--home)")}
       ${kpiCard("Ambos marcan", pct(btts), "sí / no", "var(--good)")}

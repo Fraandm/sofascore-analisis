@@ -69,7 +69,7 @@ El resultado queda en `dist-installer\SofaScore-Setup-<versión>.exe`, junto con
 - **Contexto de fuerza**: valor de mercado de la alineación, clasificación de la competición y H2H para corregir favoritos artificiales.
 - **Red neuronal de apoyo**: MLP entrenada con partidos históricos de clubes y selecciones para ajustar los goles y las tarjetas; se combina con Monte Carlo cuando mejora la validación.
 - **Alineaciones y árbitro**: etiqueta si la alineación es probable o confirmada, usa los titulares confirmados en la simulación y ajusta tarjetas/faltas con el historial del árbitro.
-- **Simulación Monte Carlo con NumPy**: miles de escenarios para estimar distribuciones, percentiles, probabilidades 1X2, ambos marcan, over/under y matriz de marcadores.
+- **Simulación Monte Carlo con NumPy**: miles de escenarios para estimar distribuciones, percentiles, probabilidades 1X2, ambos marcan, over/under y matriz de marcadores. En partidos en vivo muestra el marcador esperado hasta el minuto actual y la proyección final.
 - **Interfaz web local HTML5/CSS/JS** para elegir el partido, la ventana de partidos y exportar el análisis, con **siete temas visuales**, búsqueda instantánea, filtros, atajos de teclado, gráficos propios y diseño adaptable. Incluye **modo clásico de Tkinter** como respaldo.
 - **Accesibilidad y teclado**: etiquetas ARIA, foco visible, navegación por pestañas con flechas, modales con foco atrapado, estados de carga anunciados y objetivos táctiles mejorados.
 - **Ejecutable para Windows** que se abre con doble clic desde el Explorador.
@@ -212,7 +212,7 @@ Al cargar una fecha, los partidos terminados aparecen con su marcador final. Par
 
 La validación muestra el marcador real, la comparación entre lo esperado y lo real, el error, el rango P10–P90 y si el valor real cae dentro del rango. El partido objetivo se excluye siempre del entrenamiento: solo se usan sus rivales anteriores a la fecha del partido. Sus estadísticas reales se emplean únicamente para validar, nunca como entrada del modelo.
 
-En partidos en vivo, las estadísticas actuales se escalan por el minuto jugado y se comparan con la proyección final. Vuelve a pulsar **Actualizar análisis** para refrescar el minuto y los datos.
+En partidos en vivo, las estadísticas actuales se escalan por el minuto jugado y se comparan con la proyección final. La simulación muestra además **Marcador esperado** hasta ese minuto y **Proyección final**, que suma al marcador actual los goles esperados en el tiempo restante. Vuelve a pulsar **Actualizar análisis** para refrescar el minuto y los datos.
 
 ### Estudio de previas
 
@@ -976,7 +976,7 @@ Las pruebas no hacen peticiones de red:
 python -m unittest discover -s tests -v
 ```
 
-Son 99 pruebas: normalización, fechas, zonas horarias, exportación, regiones, estadísticas de forma, análisis completo con un cliente falso, perfil del árbitro, xG y tasas concedidas, contexto de fuerza, red neuronal, exclusión de amistosos del entrenamiento, validación de partidos finalizados y en vivo, caché de simulaciones y el motor Monte Carlo (reproducibilidad, coherencia, alineaciones, árbitro, percentiles, mercados y serialización).
+Son 101 pruebas: normalización, fechas, zonas horarias, exportación, regiones, estadísticas de forma, análisis completo con un cliente falso, perfil del árbitro, xG y tasas concedidas, contexto de fuerza, red neuronal, exclusión de amistosos del entrenamiento, proyección de marcador en vivo, validación de partidos finalizados y en vivo, caché de simulaciones y el motor Monte Carlo (reproducibilidad, coherencia, alineaciones, árbitro, percentiles, mercados y serialización).
 
 ---
 
