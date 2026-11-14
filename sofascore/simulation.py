@@ -1081,6 +1081,13 @@ def run_simulation(
     rng = np.random.default_rng(seed)
     started = time.perf_counter()
 
+    # Partido en vivo: se simula solo el tiempo restante y se suma el estado
+    # actual (marcador y estadísticas) para condicionar las probabilidades.
+    live = live_state(analysis)
+    remaining = live["remaining"] if live else 1.0
+    current_goals = live["current"] if live else {"home": 0, "away": 0}
+    current_stats = live["stats"] if live else {"home": {}, "away": {}}
+
     # Factores latentes: un partido abierto genera más remates/córners y
     # un partido intenso genera más faltas/tarjetas.
     match_tempo = rng.gamma(8.0, 1.0 / 8.0, count)
@@ -1097,10 +1104,11 @@ def run_simulation(
         ("away", away_tempo, away_intensity),
     ):
         block = model[side]
+        current = current_stats.get(side) or {}
         shot_factor = match_tempo * tempo
         shots = _negative_binomial(
             rng,
-            block["shots"],
+            block["shots"] * remaining,
             block["dispersion"]["shots"],
             shot_factor,
         )
@@ -1113,31 +1121,39 @@ def run_simulation(
         corner_factor = (match_tempo ** 0.7) * (tempo ** 0.7)
         corners = _negative_binomial(
             rng,
-            block["corners"],
+            block["corners"] * remaining,
             block["dispersion"]["corners"],
             corner_factor,
         )
         card_factor = (match_intensity ** 0.8) * (intensity ** 0.8)
         cards = _negative_binomial(
             rng,
-            block["cards"],
+            block["cards"] * remaining,
             block["dispersion"]["cards"],
             card_factor,
         )
         foul_factor = match_intensity * intensity
         fouls = _negative_binomial(
             rng,
-            block["fouls"],
+            block["fouls"] * remaining,
             block["dispersion"]["fouls"],
             foul_factor,
         )
 
-        samples[f"{side}_shots"] = shots.astype(np.int32)
-        samples[f"{side}_shots_on_target"] = on_target.astype(np.int32)
-        samples[f"{side}_goals"] = goals.astype(np.int32)
-        samples[f"{side}_corners"] = corners.astype(np.int32)
-        samples[f"{side}_cards"] = cards.astype(np.int32)
-        samples[f"{side}_fouls"] = fouls.astype(np.int32)
+        samples[f"{side}_shots"] = (shots + current.get("shots", 0)).astype(np.int32)
+        samples[f"{side}_shots_on_target"] = (
+            on_target + current.get("shots_on_target", 0)
+        ).astype(np.int32)
+        samples[f"{side}_goals"] = (
+            goals + current_goals.get(side, 0)
+        ).astype(np.int32)
+        samples[f"{side}_corners"] = (
+            corners + current.get("corners", 0)
+        ).astype(np.int32)
+        samples[f"{side}_cards"] = (cards + current.get("cards", 0)).astype(np.int32)
+        samples[f"{side}_fouls"] = (
+            fouls + current.get("fouls", 0)
+        ).astype(np.int32)
 
     # Coherencia: las paradas son remates al arco del rival no convertidos.
     samples["home_saves"] = np.maximum(
@@ -1296,8 +1312,47 @@ def _score_pair(score: Any) -> Optional[Tuple[int, int]]:
         return None
 
 
+LIVE_STAT_KEYS = ("shots", "shots_on_target", "corners", "cards", "fouls")
+
+
+def live_state(analysis: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Estado actual de un partido en vivo para condicionar la simulación.
+
+    Devuelve ``None`` si el partido no está en vivo o no tiene marcador. El
+    ``remaining`` es la fracción de partido que queda por jugar.
+    """
+    actual = (analysis or {}).get("actual") or {}
+    if actual.get("status") != "live":
+        return None
+    score = _score_pair(actual.get("score"))
+    if score is None:
+        return None
+    try:
+        minute = float(actual.get("minute") or 0.0)
+    except (TypeError, ValueError):
+        return None
+    minute = _clip(minute, 0.0, 90.0)
+    stats: Dict[str, Dict[str, int]] = {}
+    for side in ("home", "away"):
+        row = actual.get(side) or {}
+        stats[side] = {
+            key: int(round(float(row[key])))
+            if isinstance(row.get(key), (int, float)) and row.get(key) is not None
+            else 0
+            for key in LIVE_STAT_KEYS
+        }
+    return {
+        "minute": minute,
+        "remaining": 1.0 - minute / 90.0,
+        "current": {"home": score[0], "away": score[1]},
+        "stats": stats,
+    }
+
+
 def live_projection(
-    summary: Dict[str, Any], actual: Optional[Dict[str, Any]] = None
+    actual: Optional[Dict[str, Any]],
+    home_full: Optional[float],
+    away_full: Optional[float],
 ) -> Optional[Dict[str, Any]]:
     """Marcador esperado por el modelo en el minuto actual de un partido en vivo.
 
@@ -1305,18 +1360,11 @@ def live_projection(
     minuto jugado. ``expected_final_score`` parte del marcador real y añade los
     goles que el modelo espera en el tiempo restante.
     """
-    actual = actual or (summary or {}).get("actual") or {}
+    actual = actual or {}
     if actual.get("status") != "live":
         return None
     current = _score_pair(actual.get("score"))
     if current is None:
-        return None
-    teams = (summary or {}).get("teams") or {}
-    home_expected = ((teams.get("home") or {}).get("expected") or {})
-    away_expected = ((teams.get("away") or {}).get("expected") or {})
-    home_full = home_expected.get("goals_for")
-    away_full = away_expected.get("goals_for")
-    if home_full is None or away_full is None:
         return None
     try:
         home_full = float(home_full)
@@ -1552,7 +1600,11 @@ def _summarize(result: SimulationResult) -> Dict[str, Any]:
     actual = (result.analysis or {}).get("actual")
     if actual is not None:
         summary["actual"] = actual
-        live = live_projection(summary, actual)
+        live = live_projection(
+            actual,
+            result.model["home"]["goals"],
+            result.model["away"]["goals"],
+        )
         if live is not None:
             summary["live"] = live
     return summary

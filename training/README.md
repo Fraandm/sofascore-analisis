@@ -71,6 +71,10 @@ alineaciones y genera:
   selecciones que también se activa en amistosos.
 - Validación temporal: temporadas anteriores para entrenar, inicio de 2026/27
   para validar y los partidos más recientes para probar.
+- Calibración de la mezcla en validación entre 0 % y 100 % para cada mercado:
+  la red solo pierde peso frente a la referencia histórica cuando aporta peor
+  MAE.
+- Ensemble de 5 redes para reducir la varianza de los pesos.
 - Datos de Europa, Sudamérica y selecciones. Las selecciones usan un mínimo
   de dos partidos previos para poder aprovechar su calendario más disperso.
 

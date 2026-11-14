@@ -406,6 +406,7 @@ class WebService:
             metrics = {}
         neural_mae = metrics.get("test_mae_neural") or []
         baseline_mae = metrics.get("test_mae_baseline") or []
+        blended_mae = metrics.get("test_mae_blended") or []
         targets = []
         for index, (key, label) in enumerate(MODEL_TARGETS):
             targets.append(
@@ -415,6 +416,9 @@ class WebService:
                     "neural": neural_mae[index] if index < len(neural_mae) else None,
                     "baseline": baseline_mae[index]
                     if index < len(baseline_mae)
+                    else None,
+                    "blended": blended_mae[index]
+                    if index < len(blended_mae)
                     else None,
                 }
             )
@@ -765,9 +769,12 @@ class WebService:
         current_actual = analysis.get("actual")
         if current_actual is not None:
             summary["actual"] = current_actual
+        model = summary.get("model") or {}
+        home_full = (model.get("home") or {}).get("goals")
+        away_full = (model.get("away") or {}).get("goals")
         live = (
-            simulation.live_projection(summary, current_actual)
-            if current_actual is not None
+            simulation.live_projection(current_actual, home_full, away_full)
+            if current_actual is not None and home_full is not None and away_full is not None
             else None
         )
         if live is None:

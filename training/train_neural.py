@@ -42,6 +42,7 @@ NATIONAL_TOURNAMENT_IDS = (
 NATIONAL_SAMPLE_WEIGHT = max(
     0.0, float(os.environ.get("SOFASCORE_NATIONAL_WEIGHT", "1.5"))
 )
+ENSEMBLE_SIZE = max(1, int(os.environ.get("SOFASCORE_ENSEMBLE", "5")))
 
 TARGET_KEYS = (
     "goals_for",
@@ -559,7 +560,7 @@ def main() -> int:
     hidden, learning_rate, _, _, _ = best
     print(f"Mejor config: {hidden} lr={learning_rate}", flush=True)
     models = []
-    for seed in range(5):
+    for seed in range(ENSEMBLE_SIZE):
         weights, biases, val_loss, epochs = train_one(
             x_train,
             y_train,
@@ -574,7 +575,11 @@ def main() -> int:
             sample_weights=train_weights,
         )
         models.append((weights, biases))
-        print(f"ensemble {seed + 1}/5 val={val_loss:.5f} epochs={epochs}", flush=True)
+        print(
+            f"ensemble {seed + 1}/{ENSEMBLE_SIZE} val={val_loss:.5f} "
+            f"epochs={epochs}",
+            flush=True,
+        )
 
     # Las features constantes en entrenamiento (por ejemplo, una competición
     # sin partidos en el dataset) no deben alterar la inferencia si aparecen
@@ -596,7 +601,7 @@ def main() -> int:
         if neural_error >= baseline_error:
             blend_weights[index] = 0.0
             continue
-        options = np.linspace(0.0, 0.35, 8)
+        options = np.linspace(0.0, 1.0, 21)
         errors = [
             np.mean(
                 np.abs(
@@ -608,6 +613,13 @@ def main() -> int:
             for weight in options
         ]
         blend_weights[index] = float(options[int(np.argmin(errors))])
+
+    blended_val = (
+        (1.0 - blend_weights) * baseline_val + blend_weights * val_rates
+    )
+    blended_test = (
+        (1.0 - blend_weights) * baseline_test + blend_weights * test_rates
+    )
 
     metrics = {
         "trained_at": datetime.now(timezone.utc).isoformat(),
@@ -621,14 +633,21 @@ def main() -> int:
         "constant_features": int(constant_features.sum()),
         "hidden": list(hidden),
         "learning_rate": learning_rate,
-        "ensemble": 5,
+        "ensemble": ENSEMBLE_SIZE,
         "test_mae_neural": mae(test_rates, y_test),
         "test_mae_baseline": mae(baseline_test, y_test),
+        "test_mae_blended": mae(blended_test, y_test),
         "test_mae_neural_national": _subset_mae(
             test_rates, y_test, national[test_mask]
         ),
         "test_mae_baseline_national": _subset_mae(
             baseline_test, y_test, national[test_mask]
+        ),
+        "test_mae_blended_national": _subset_mae(
+            blended_test, y_test, national[test_mask]
+        ),
+        "test_mae_blended_club": _subset_mae(
+            blended_test, y_test, ~national[test_mask]
         ),
         "test_mae_neural_club": _subset_mae(
             test_rates, y_test, ~national[test_mask]
@@ -643,6 +662,7 @@ def main() -> int:
     }
     print("MAE test neural:", metrics["test_mae_neural"], flush=True)
     print("MAE test baseline:", metrics["test_mae_baseline"], flush=True)
+    print("MAE test mezcla:", metrics["test_mae_blended"], flush=True)
     print(
         "MAE test selecciones:",
         metrics["test_mae_neural_national"],
@@ -664,7 +684,7 @@ def main() -> int:
         "blend_weights": blend_weights,
         "ensemble": len(models),
         "n_layers": len(models[0][0]),
-        "version": "1.1",
+        "version": "1.2",
         "metrics_json": json.dumps(metrics, ensure_ascii=False),
     }
     for model_index, (weights, biases) in enumerate(models):

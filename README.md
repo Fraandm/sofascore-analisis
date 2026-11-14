@@ -212,7 +212,7 @@ Al cargar una fecha, los partidos terminados aparecen con su marcador final. Par
 
 La validación muestra el marcador real, la comparación entre lo esperado y lo real, el error, el rango P10–P90 y si el valor real cae dentro del rango. El partido objetivo se excluye siempre del entrenamiento: solo se usan sus rivales anteriores a la fecha del partido. Sus estadísticas reales se emplean únicamente para validar, nunca como entrada del modelo.
 
-En partidos en vivo, las estadísticas actuales se escalan por el minuto jugado y se comparan con la proyección final. La simulación muestra además **Marcador esperado** hasta ese minuto y **Proyección final**, que suma al marcador actual los goles esperados en el tiempo restante. Vuelve a pulsar **Actualizar análisis** para refrescar el minuto y los datos.
+En partidos en vivo, la simulación se condiciona al marcador y al minuto actuales: simula solo el tiempo restante y suma el estado actual, de modo que 1X2, ambos marcan, over/under y marcadores más probables reflejan la situación en directo. La simulación muestra además **Marcador esperado** hasta ese minuto y **Proyección final**, que suma al marcador actual los goles esperados en el tiempo restante. Vuelve a pulsar **Actualizar análisis** para refrescar el minuto y los datos.
 
 ### Estudio de previas
 
@@ -609,27 +609,27 @@ La app incorpora una **MLP multi-salida implementada con NumPy**, sin PyTorch, p
 - Si una competición no tiene estadísticas históricas completas, la app la sigue mostrando y analizando con las features disponibles; solo queda fuera del entrenamiento.
 - Features: forma de los últimos 5/10 partidos, splits local/visitante, xG, xG al arco, ocasiones claras, remates dentro del área, estadísticas concedidas, Elo, clasificación, descanso, H2H, calidad de alineación, competición y un indicador específico de partido de selecciones.
 - Validación temporal estricta: temporadas anteriores para entrenar, inicio de 2026/27 para validar y los partidos más recientes para probar.
-- Ensemble de 5 redes y mezcla conservadora con el modelo existente.
+- Ensemble de 5 redes y mezcla calibrada en validación entre 0 % y 100 % para cada mercado. La red solo cede peso frente a la referencia histórica cuando su MAE es peor.
 - La mezcla se aplica en goles, remates, remates al arco, córners, tarjetas y faltas; en las salidas donde la validación no mejora, el peso se reduce o se anula.
 
 Métricas de la última prueba:
 
-| Salida | MAE red | MAE baseline |
-|---|---:|---:|
-| Goles local | **1,03** | 1,09 |
-| Goles visitante | **0,95** | 1,05 |
-| Remates local | **3,98** | 4,62 |
-| Remates visitante | **3,73** | 4,30 |
-| Remates al arco local | **1,83** | 2,04 |
-| Remates al arco visitante | **1,82** | 1,99 |
-| Córners local | **2,20** | 2,33 |
-| Córners visitante | **1,87** | 2,11 |
-| Tarjetas local | **1,12** | 1,16 |
-| Tarjetas visitante | **1,18** | 1,26 |
-| Faltas local | **2,96** | 3,04 |
-| Faltas visitante | 3,11 | 3,05 |
+| Salida | MAE red | MAE mezcla | MAE baseline |
+|---|---:|---:|---:|
+| Goles local | **1,03** | **1,03** | 1,09 |
+| Goles visitante | **0,95** | **0,95** | 1,05 |
+| Remates local | 3,98 | **3,97** | 4,62 |
+| Remates visitante | 3,73 | **3,71** | 4,30 |
+| Remates al arco local | **1,83** | **1,83** | 2,04 |
+| Remates al arco visitante | 1,82 | **1,82** | 1,99 |
+| Córners local | 2,20 | **2,18** | 2,33 |
+| Córners visitante | 1,87 | **1,87** | 2,11 |
+| Tarjetas local | 1,12 | **1,12** | 1,16 |
+| Tarjetas visitante | **1,18** | 1,19 | 1,26 |
+| Faltas local | 2,96 | **2,93** | 3,04 |
+| Faltas visitante | 3,11 | **3,05** | 3,05 |
 
-En los **54 partidos de selecciones** del conjunto de prueba, el MAE de goles fue **0,90 / 0,90**, frente a **0,94 / 1,17** del baseline. El modelo también mejora claramente remates, remates al arco y córners en selecciones.
+En los **54 partidos de selecciones** del conjunto de prueba, el MAE de goles fue **0,90 / 0,90**, frente a **0,94 / 1,17** del baseline. El modelo también mejora claramente remates, remates al arco y córners en selecciones. La columna **Mezcla** es la que utiliza la simulación: combina la red con la referencia histórica usando el peso calibrado en validación.
 
 Los pesos están en `sofascore/models/neural_model.npz` y el modelo se incluye en el ejecutable. Para reentrenar:
 
@@ -976,7 +976,7 @@ Las pruebas no hacen peticiones de red:
 python -m unittest discover -s tests -v
 ```
 
-Son 101 pruebas: normalización, fechas, zonas horarias, exportación, regiones, estadísticas de forma, análisis completo con un cliente falso, perfil del árbitro, xG y tasas concedidas, contexto de fuerza, red neuronal, exclusión de amistosos del entrenamiento, proyección de marcador en vivo, validación de partidos finalizados y en vivo, caché de simulaciones y el motor Monte Carlo (reproducibilidad, coherencia, alineaciones, árbitro, percentiles, mercados y serialización).
+Son 102 pruebas: normalización, fechas, zonas horarias, exportación, regiones, estadísticas de forma, análisis completo con un cliente falso, perfil del árbitro, xG y tasas concedidas, contexto de fuerza, red neuronal, exclusión de amistosos del entrenamiento, proyección de marcador en vivo, simulación condicionada al estado actual, validación de partidos finalizados y en vivo, caché de simulaciones y el motor Monte Carlo (reproducibilidad, coherencia, alineaciones, árbitro, percentiles, mercados y serialización).
 
 ---
 

@@ -492,24 +492,51 @@ class SimulationTests(unittest.TestCase):
         }
         summary = simulation.simulate_match(analysis, iterations=1000, seed=42)
         live = summary["live"]
-        home_expected = summary["teams"]["home"]["expected"]["goals_for"]
-        away_expected = summary["teams"]["away"]["expected"]["goals_for"]
+        home_full = summary["model"]["home"]["goals"]
+        away_full = summary["model"]["away"]["goals"]
         self.assertEqual(live["current_score"], "1-0")
         self.assertEqual(live["minute"], 60.0)
         self.assertEqual(
             live["expected_now_score"],
-            f"{round(home_expected * 2 / 3)}-{round(away_expected * 2 / 3)}",
+            f"{round(home_full * 2 / 3)}-{round(away_full * 2 / 3)}",
         )
         self.assertEqual(
             live["expected_final_score"],
-            f"{round(1 + home_expected / 3)}-{round(away_expected / 3)}",
+            f"{round(1 + home_full / 3)}-{round(away_full / 3)}",
         )
         self.assertAlmostEqual(
-            live["remaining_goals"]["home"], home_expected / 3, places=2
+            live["remaining_goals"]["home"], home_full / 3, places=2
         )
         self.assertAlmostEqual(
-            live["remaining_goals"]["away"], away_expected / 3, places=2
+            live["remaining_goals"]["away"], away_full / 3, places=2
         )
+
+    def test_live_simulation_is_conditioned_on_current_state(self):
+        analysis = copy.deepcopy(ANALYSIS)
+        analysis["actual"] = {
+            "status": "live",
+            "minute": 60,
+            "score": "2-1",
+        }
+        summary = simulation.simulate_match(analysis, iterations=5000, seed=42)
+        home_full = summary["model"]["home"]["goals"]
+        away_full = summary["model"]["away"]["goals"]
+        # El esperado final del local parte de sus 2 goles y añade el tercio
+        # restante de su producción prepartido.
+        self.assertAlmostEqual(
+            summary["teams"]["home"]["expected"]["goals_for"],
+            2 + home_full / 3,
+            delta=0.35,
+        )
+        self.assertAlmostEqual(
+            summary["teams"]["away"]["expected"]["goals_for"],
+            1 + away_full / 3,
+            delta=0.35,
+        )
+        # Los marcadores más probables no pueden quedar por debajo del actual.
+        for item in summary["scorelines"]:
+            self.assertGreaterEqual(item["home"], 2)
+            self.assertGreaterEqual(item["away"], 1)
 
     def test_finished_matches_do_not_have_live_projection(self):
         analysis = copy.deepcopy(ANALYSIS)

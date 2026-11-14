@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-from . import __version__, neural, normalize
+from . import __version__, neural, normalize, simulation
 
 CACHE_TTL_SECONDS = 7 * 24 * 3600
 
@@ -103,6 +103,9 @@ def fingerprint(
         "h2h": analysis.get("h2h"),
         "events": event_ids,
     }
+    live = simulation.live_state(analysis)
+    if live is not None:
+        payload["live"] = live
     encoded = json.dumps(
         payload, ensure_ascii=False, sort_keys=True, default=str
     ).encode("utf-8")

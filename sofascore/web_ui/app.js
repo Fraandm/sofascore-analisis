@@ -910,7 +910,7 @@ function updateModelMini() {
   const targets = model.targets || [];
   const goals = targets.filter((target) => target.key.includes("goals"));
   const values = goals
-    .map((target) => Number(target.neural))
+    .map((target) => Number(target.blended ?? target.neural))
     .filter((value) => Number.isFinite(value));
   const mae = $("#sidebarModelMae");
   if (mae) {
@@ -2253,6 +2253,23 @@ function renderHeatmap(matrix, homeName, awayName) {
     <div class="heatmap-axis"><span>${esc(shortName(homeName, 15))} ↓</span><span>${esc(shortName(awayName, 15))} →</span></div></div>`;
 }
 
+function modelExpectedTotal(summary, key) {
+  const model = summary?.model || {};
+  const home = model.home || {};
+  const away = model.away || {};
+  const num = (value) => (value === null || value === undefined ? NaN : Number(value));
+  if (key === "goals") return num(home.goals) + num(away.goals);
+  if (key === "shots") return num(home.shots) + num(away.shots);
+  if (key === "shots_on_target") {
+    return num(home.expected_shots_on_target) + num(away.expected_shots_on_target);
+  }
+  if (key === "saves") return num(home.expected_saves) + num(away.expected_saves);
+  if (key === "corners" || key === "cards" || key === "fouls") {
+    return num(home[key]) + num(away[key]);
+  }
+  return NaN;
+}
+
 function renderValidation(actual, summary) {
   if (!actual) {
     return `<div class="chart-empty">Disponible para partidos finalizados o en vivo.</div>`;
@@ -2276,11 +2293,21 @@ function renderValidation(actual, summary) {
       const real = actualTotals[key];
       const simulated = mean[key];
       if (real === null || real === undefined || simulated === null || simulated === undefined) return "";
-      const expected = Number(simulated) * scale;
-      const p10 = percentiles[key]?.p10;
-      const p90 = percentiles[key]?.p90;
-      const low = p10 !== null && p10 !== undefined ? Number(p10) * scale : null;
-      const high = p90 !== null && p90 !== undefined ? Number(p90) * scale : null;
+      let expected;
+      let low = null;
+      let high = null;
+      if (live) {
+        const modelTotal = modelExpectedTotal(summary, key);
+        expected = Number.isFinite(modelTotal)
+          ? modelTotal * scale
+          : Number(simulated) * scale;
+      } else {
+        expected = Number(simulated);
+        const p10 = percentiles[key]?.p10;
+        const p90 = percentiles[key]?.p90;
+        low = p10 !== null && p10 !== undefined ? Number(p10) : null;
+        high = p90 !== null && p90 !== undefined ? Number(p90) : null;
+      }
       const inside = low !== null && high !== null && Number(real) >= low && Number(real) <= high;
       return `<tr><td>${esc(label)}</td><td class="num">${esc(fmtInt(real))}</td><td class="num">${esc(fmt(expected, 1))}</td><td class="num">${esc(signed(Number(real) - expected, 1))}</td><td class="num">${low !== null ? `${fmtInt(low)}–${fmtInt(high)}` : "—"}</td><td class="num"><span class="inside ${inside ? "yes" : "no"}">${inside ? "Sí" : "No"}</span></td></tr>`;
     })
@@ -3027,9 +3054,11 @@ function renderModel() {
     .map((target) => {
       const neural = Number(target.neural);
       const baseline = Number(target.baseline);
+      const blended = Number(target.blended);
       if (!Number.isFinite(neural) && !Number.isFinite(baseline)) return "";
-      const better = Number.isFinite(neural) && Number.isFinite(baseline) ? neural < baseline : null;
-      return `<tr><td>${esc(target.label)}</td><td class="num">${esc(fmt(neural, 3))}</td><td class="num">${esc(fmt(baseline, 3))}</td><td class="num ${better === true ? "better" : better === false ? "worse" : ""}">${better === null ? "—" : better ? "Mejor" : "Peor"}</td></tr>`;
+      const final = Number.isFinite(blended) ? blended : neural;
+      const better = Number.isFinite(final) && Number.isFinite(baseline) ? final < baseline : null;
+      return `<tr><td>${esc(target.label)}</td><td class="num">${esc(fmt(neural, 3))}</td><td class="num">${esc(fmt(final, 3))}</td><td class="num">${esc(fmt(baseline, 3))}</td><td class="num ${better === true ? "better" : better === false ? "worse" : ""}">${better === null ? "—" : better ? "Mejor" : "Peor"}</td></tr>`;
     })
     .join("");
   const blends = Object.entries(model.blend_weights || {}).filter(([, value]) => Number(value) > 0);
@@ -3051,9 +3080,9 @@ function renderModel() {
     </div>
     <div class="card card-pad">
       <div class="section-title">${icon("chart")}Error por mercado</div>
-      <div style="overflow-x:auto"><table class="mae-table"><thead><tr><th scope="col">Mercado</th><th scope="col" class="num">Red</th><th scope="col" class="num">Base</th><th scope="col" class="num">Resultado</th></tr></thead><tbody>${maeRows || '<tr><td colspan="4">Sin métricas.</td></tr>'}</tbody></table></div>
+      <div style="overflow-x:auto"><table class="mae-table"><thead><tr><th scope="col">Mercado</th><th scope="col" class="num">Red</th><th scope="col" class="num">Mezcla</th><th scope="col" class="num">Base</th><th scope="col" class="num">Resultado</th></tr></thead><tbody>${maeRows || '<tr><td colspan="5">Sin métricas.</td></tr>'}</tbody></table></div>
       <div class="inline-note" style="margin-top:8px">${icon("info")}MAE: error absoluto medio. Cuanto menor, mejor.</div>
-      ${Array.isArray(metrics.test_mae_neural_national) ? `<div class="inline-note" style="margin-top:4px">${icon("users")}Selecciones: MAE de goles ${esc(fmt(metrics.test_mae_neural_national[0], 2))} / ${esc(fmt(metrics.test_mae_neural_national[1], 2))} en ${esc(fmtInt(metrics.national_test || 0))} partidos de test.</div>` : ""}
+      ${Array.isArray(metrics.test_mae_blended_national) ? `<div class="inline-note" style="margin-top:4px">${icon("users")}Selecciones: MAE de goles ${esc(fmt(metrics.test_mae_blended_national[0], 2))} / ${esc(fmt(metrics.test_mae_blended_national[1], 2))} en ${esc(fmtInt(metrics.national_test || 0))} partidos de test.</div>` : ""}
     </div>
   </div>
   <div class="grid-2" style="margin-top:14px;align-items:start">
