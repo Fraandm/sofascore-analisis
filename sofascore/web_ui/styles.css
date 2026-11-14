@@ -309,6 +309,17 @@ textarea {
   color: inherit;
 }
 
+select {
+  color: var(--text);
+  background-color: var(--surface-solid);
+}
+
+select option,
+select optgroup {
+  color: var(--text);
+  background-color: var(--surface-solid);
+}
+
 button {
   cursor: pointer;
 }
@@ -1076,10 +1087,10 @@ svg {
 .select-field select {
   border: 0;
   outline: 0;
-  background: transparent;
+  background: var(--surface-solid);
   font-size: 11.5px;
   font-weight: 650;
-  color: var(--text-soft);
+  color: var(--text);
   max-width: 190px;
   padding: 0 4px 0 0;
   cursor: pointer;
@@ -1090,7 +1101,7 @@ svg {
 }
 
 .select-label {
-  color: var(--faint);
+  color: var(--muted);
   font-size: 10px;
   font-weight: 750;
   text-transform: uppercase;

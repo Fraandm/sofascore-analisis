@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "1.16.0"
+__version__ = "1.16.1"
 
 from .client import ClientConfig, SofaScoreClient  # noqa: E402
 from .exceptions import (  # noqa: E402
