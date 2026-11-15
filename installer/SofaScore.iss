@@ -1,9 +1,9 @@
 ; Instalador de SofaScore para Windows.
-; Compilar con: ISCC.exe /DMyAppVersion=1.17.0 installer\SofaScore.iss
+; Compilar con: ISCC.exe /DMyAppVersion=1.18.0 installer\SofaScore.iss
 
 #define MyAppName "SofaScore"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.17.0"
+  #define MyAppVersion "1.18.0"
 #endif
 #define MyAppPublisher "Fraandm"
 #define MyAppURL "https://github.com/Fraandm/sofascore-analisis"

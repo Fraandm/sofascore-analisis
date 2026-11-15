@@ -46,6 +46,7 @@ guardados.
 
 ```bash
 python training/train_neural.py
+python training/train_gbm.py   # opcional: ensamble de gradient boosting (scikit-learn)
 ```
 
 El entrenador combina los tres datasets, deduplica por ID, cruza las

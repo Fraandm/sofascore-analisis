@@ -610,6 +610,7 @@ La app incorpora una **MLP multi-salida implementada con NumPy**, sin PyTorch, p
 - Features: forma de los últimos 5/10 partidos, splits local/visitante, xG, xG al arco, ocasiones claras, remates dentro del área, estadísticas concedidas, Elo, clasificación, descanso, H2H, calidad de alineación, competición y un indicador específico de partido de selecciones.
 - Validación temporal estricta: temporadas anteriores para entrenar, inicio de 2026/27 para validar y los partidos más recientes para probar.
 - Ensemble de 5 redes y mezcla calibrada en validación entre 0 % y 100 % para cada mercado. La red solo cede peso frente a la referencia histórica cuando su MAE es peor.
+- En **goles** se suma además un **gradient boosting de Poisson** (árboles serializados para inferencia NumPy) con un peso del 60 % sobre la red.
 - La mezcla se aplica en goles, remates, remates al arco, córners, tarjetas y faltas; en las salidas donde la validación no mejora, el peso se reduce o se anula.
 
 Métricas de la última prueba:
@@ -629,7 +630,7 @@ Métricas de la última prueba:
 | Faltas local | 2,96 | **2,93** | 3,04 |
 | Faltas visitante | 3,11 | **3,05** | 3,05 |
 
-En los **54 partidos de selecciones** del conjunto de prueba, el MAE de goles fue **0,90 / 0,90**, frente a **0,94 / 1,17** del baseline. El modelo también mejora claramente remates, remates al arco y córners en selecciones. La columna **Mezcla** es la que utiliza la simulación: combina la red con la referencia histórica usando el peso calibrado en validación.
+En los **54 partidos de selecciones** del conjunto de prueba, el MAE de goles fue **0,90 / 0,90**, frente a **0,94 / 1,17** del baseline. El modelo también mejora claramente remates, remates al arco y córners en selecciones. La columna **Mezcla** es la que utiliza la simulación: combina la red con la referencia histórica usando el peso calibrado en validación. Con el ensamble de gradient boosting, el MAE de goles en test baja a **1,00 / 0,95**.
 
 Los pesos están en `sofascore/models/neural_model.npz` y el modelo se incluye en el ejecutable. Para reentrenar:
 
@@ -639,6 +640,7 @@ python training/collect_extra.py
 python training/collect_national.py
 python training/collect_lineups.py
 python training/train_neural.py
+python training/train_gbm.py   # opcional: ensamble de gradient boosting (scikit-learn)
 ```
 
 El dataset bruto queda en `training/data/dataset.jsonl`, `training/data/dataset_extra.jsonl`, `training/data/dataset_national.jsonl` y `training/data/lineups.jsonl`; las métricas, en `training/metrics.json`.
@@ -926,6 +928,7 @@ Si recibes un `403` persistente:
 │   ├── simulation.py      # modelo Monte Carlo con NumPy
 │   ├── simulation_cache.py # caché persistente de simulaciones
 │   ├── neural.py          # inferencia de la red neuronal (NumPy)
+│   ├── gbm.py             # inferencia del gradient boosting (NumPy)
 │   ├── models/            # pesos de la red neuronal
 │   ├── webapp.py          # servidor local y API de la interfaz web
 │   ├── web_ui/            # HTML, CSS y JavaScript de la interfaz
@@ -954,6 +957,7 @@ Si recibes un `403` persistente:
 │   ├── collect_national.py # selecciones oficiales (sin amistosos)
 │   ├── collect_lineups.py # alineaciones y valores de plantilla
 │   ├── train_neural.py    # entrena y exporta los pesos
+│   ├── train_gbm.py       # ensamble de gradient boosting (opcional)
 │   ├── metrics.json       # métricas de la última prueba
 │   └── data/              # dataset de entrenamiento
 ├── SofaScore.exe          # ejecutable para Windows (doble clic)
@@ -976,7 +980,7 @@ Las pruebas no hacen peticiones de red:
 python -m unittest discover -s tests -v
 ```
 
-Son 102 pruebas: normalización, fechas, zonas horarias, exportación, regiones, estadísticas de forma, análisis completo con un cliente falso, perfil del árbitro, xG y tasas concedidas, contexto de fuerza, red neuronal, exclusión de amistosos del entrenamiento, proyección de marcador en vivo, simulación condicionada al estado actual, validación de partidos finalizados y en vivo, caché de simulaciones y el motor Monte Carlo (reproducibilidad, coherencia, alineaciones, árbitro, percentiles, mercados y serialización).
+Son 103 pruebas: normalización, fechas, zonas horarias, exportación, regiones, estadísticas de forma, análisis completo con un cliente falso, perfil del árbitro, xG y tasas concedidas, contexto de fuerza, red neuronal, ensamble de gradient boosting, exclusión de amistosos del entrenamiento, proyección de marcador en vivo, simulación condicionada al estado actual, validación de partidos finalizados y en vivo, caché de simulaciones y el motor Monte Carlo (reproducibilidad, coherencia, alineaciones, árbitro, percentiles, mercados y serialización).
 
 ---
 

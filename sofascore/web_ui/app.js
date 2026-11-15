@@ -3083,6 +3083,7 @@ function renderModel() {
       <div style="overflow-x:auto"><table class="mae-table"><thead><tr><th scope="col">Mercado</th><th scope="col" class="num">Red</th><th scope="col" class="num">Mezcla</th><th scope="col" class="num">Base</th><th scope="col" class="num">Resultado</th></tr></thead><tbody>${maeRows || '<tr><td colspan="5">Sin métricas.</td></tr>'}</tbody></table></div>
       <div class="inline-note" style="margin-top:8px">${icon("info")}MAE: error absoluto medio. Cuanto menor, mejor.</div>
       ${Array.isArray(metrics.test_mae_blended_national) ? `<div class="inline-note" style="margin-top:4px">${icon("users")}Selecciones: MAE de goles ${esc(fmt(metrics.test_mae_blended_national[0], 2))} / ${esc(fmt(metrics.test_mae_blended_national[1], 2))} en ${esc(fmtInt(metrics.national_test || 0))} partidos de test.</div>` : ""}
+      ${Array.isArray(metrics.test_mae_ensemble_goals) ? `<div class="inline-note" style="margin-top:4px">${icon("layers")}Ensemble GBM: goles MAE ${esc(fmt(metrics.test_mae_ensemble_goals[0], 2))} / ${esc(fmt(metrics.test_mae_ensemble_goals[1], 2))} · peso ${esc(fmt((metrics.gbm_weight || 0) * 100, 0))} %</div>` : ""}
     </div>
   </div>
   <div class="grid-2" style="margin-top:14px;align-items:start">

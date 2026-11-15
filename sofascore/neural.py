@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from . import normalize, regions
+from . import gbm, normalize, regions
 
 MODEL_PATH = Path(__file__).with_name("models") / "neural_model.npz"
 
@@ -315,6 +315,21 @@ def build_feature_vector(
     return np.asarray(features, dtype=np.float32)
 
 
+def _load_forest(payload: Any, prefix: str) -> Dict[str, Any]:
+    return {
+        "baseline": float(np.asarray(payload[f"{prefix}_baseline"]).ravel()[0]),
+        "n_trees": int(payload[f"{prefix}_n_trees"]),
+        "offsets": np.asarray(payload[f"{prefix}_offsets"]),
+        "feat": np.asarray(payload[f"{prefix}_feat"]),
+        "thr": np.asarray(payload[f"{prefix}_thr"]),
+        "left": np.asarray(payload[f"{prefix}_left"]),
+        "right": np.asarray(payload[f"{prefix}_right"]),
+        "missing_left": np.asarray(payload[f"{prefix}_missing_left"]),
+        "leaf": np.asarray(payload[f"{prefix}_leaf"]),
+        "value": np.asarray(payload[f"{prefix}_value"]),
+    }
+
+
 def _load_model() -> Optional[Dict[str, Any]]:
     if not MODEL_PATH.exists():
         return None
@@ -361,6 +376,12 @@ def _load_model() -> Optional[Dict[str, Any]]:
                 )
             model["weights"].append(weights)
             model["biases"].append(biases)
+        model["gbm_weight"] = (
+            float(payload["gbm_weight"]) if "gbm_weight" in payload else 0.0
+        )
+        if model["gbm_weight"] > 0.0 and "gbm_home_n_trees" in payload:
+            model["gbm_home"] = _load_forest(payload, "gbm_home")
+            model["gbm_away"] = _load_forest(payload, "gbm_away")
     except (OSError, KeyError, ValueError):
         return None
     _MODEL_CACHE["mtime"] = mtime
@@ -527,6 +548,18 @@ def predict_rates(analysis: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "home": value(f"home_{key}"),
             "away": value(f"away_{key}"),
         }
+    # Ensamble con gradient boosting para los goles (si está disponible).
+    gbm_weight = float(model.get("gbm_weight") or 0.0)
+    if gbm_weight > 0.0 and "gbm_home" in model:
+        batch = features.reshape(1, -1)
+        home_gbm = float(gbm.predict_rates(batch, model["gbm_home"])[0])
+        away_gbm = float(gbm.predict_rates(batch, model["gbm_away"])[0])
+        totals["goals"]["home"] = (
+            (1.0 - gbm_weight) * totals["goals"]["home"] + gbm_weight * home_gbm
+        )
+        totals["goals"]["away"] = (
+            (1.0 - gbm_weight) * totals["goals"]["away"] + gbm_weight * away_gbm
+        )
     # Los límites evitan que una predicción aislada domine al modelo.
     limits = {
         "goals": (0.10, 5.0),

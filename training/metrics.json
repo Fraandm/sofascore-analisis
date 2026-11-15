@@ -153,5 +153,11 @@
     "away_cards": 0.5,
     "home_fouls": 0.6,
     "away_fouls": 0.0
-  }
+  },
+  "gbm_weight": 0.6,
+  "test_mae_ensemble_goals": [
+    1.0019,
+    0.9455
+  ],
+  "model_version": "1.3"
 }

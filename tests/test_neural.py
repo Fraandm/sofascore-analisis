@@ -7,7 +7,7 @@ import unittest
 
 import numpy as np
 
-from sofascore import neural, simulation
+from sofascore import gbm, neural, simulation
 from tests.test_simulation import ANALYSIS
 
 HAS_MODEL = neural.MODEL_PATH.exists()
@@ -66,6 +66,20 @@ class NeuralFeatureTests(unittest.TestCase):
             self.assertIn(key, rates["rates"])
             self.assertGreater(rates["rates"][key]["home"], 0)
             self.assertGreater(rates["rates"][key]["away"], 0)
+
+    @unittest.skipUnless(HAS_MODEL, "modelo neuronal no entrenado")
+    def test_gbm_ensemble_is_available(self):
+        model = neural._load_model()
+        self.assertIsNotNone(model)
+        if model.get("gbm_weight"):
+            self.assertGreater(model["gbm_weight"], 0)
+            self.assertIn("gbm_home", model)
+            self.assertIn("gbm_away", model)
+            features = neural.features_from_analysis(ANALYSIS, model)
+            home = float(gbm.predict_rates(features[None, :], model["gbm_home"])[0])
+            away = float(gbm.predict_rates(features[None, :], model["gbm_away"])[0])
+            self.assertTrue(np.isfinite(home) and home > 0)
+            self.assertTrue(np.isfinite(away) and away > 0)
 
     @unittest.skipUnless(HAS_MODEL, "modelo neuronal no entrenado")
     def test_simulation_uses_neural_when_available(self):
